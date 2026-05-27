@@ -1,5 +1,6 @@
 <script>
   import { tick } from "svelte";
+  import { t } from "$lib/i18n.js";
 
   let { config, isNew, onSave, onDelete, name, onNameChange, triggerSave } =
     $props();
@@ -7,11 +8,9 @@
   let text = $state(config.text);
   let playSound = $state(config.play_sound);
 
-  // Interval: value + unit
   let intervalValue = $state(deriveValue(config.interval_secs));
   let intervalUnit = $state(deriveUnit(config.interval_secs));
 
-  // Display duration: value + unit
   let displayValue = $state(deriveValue(config.display_secs));
   let displayUnit = $state(deriveUnit(config.display_secs));
 
@@ -33,12 +32,6 @@
     return value;
   }
 
-  function unitLabel(unit) {
-    if (unit === "hours") return "小时";
-    if (unit === "minutes") return "分钟";
-    return "秒";
-  }
-
   function displaySeconds() {
     return toSeconds(displayValue, displayUnit);
   }
@@ -57,6 +50,7 @@
     }
     return `${secs}`;
   }
+
   let prevTriggerSave = triggerSave;
   $effect(() => {
     if (triggerSave > prevTriggerSave) {
@@ -78,36 +72,28 @@
   }
 
   function handleDelete() {
-    if (confirm("确认删除这个提醒？")) {
-      onDelete(config.id);
-    }
+    if (confirm($t.deleteConfirm)) onDelete(config.id);
   }
 
   function playBeep() {
     try {
       const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 660;
-      osc.type = "sine";
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.5);
-      setTimeout(() => {
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.frequency.value = 880;
-        osc2.type = "sine";
-        gain2.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-        osc2.start(ctx.currentTime);
-        osc2.stop(ctx.currentTime + 0.5);
-      }, 300);
+      const beep = (freq, delay) => {
+        setTimeout(() => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.5);
+        }, delay);
+      };
+      beep(660, 0);
+      beep(880, 300);
     } catch (e) {
       console.warn("Audio playback failed:", e);
     }
@@ -118,11 +104,11 @@
   <textarea
     class="text-input"
     bind:value={text}
-    placeholder="遮挡屏幕时显示的文字…"
+    placeholder={$t.textPlaceholder}
   ></textarea>
 
   <div class="timing-row">
-    <span class="timing-label">每</span>
+    <span class="timing-label">{$t.everyLabel}</span>
     <input
       class="timing-num"
       type="number"
@@ -130,16 +116,16 @@
       min="1"
     />
     <select class="timing-unit" bind:value={intervalUnit}>
-      <option value="seconds">秒</option>
-      <option value="minutes">分钟</option>
-      <option value="hours">小时</option>
+      <option value="seconds">{$t.unitSeconds}</option>
+      <option value="minutes">{$t.unitMinutes}</option>
+      <option value="hours">{$t.unitHours}</option>
     </select>
-    <span class="timing-label">提醒一次，显示</span>
+    <span class="timing-label">{$t.remindOnceLabel}</span>
     <input class="timing-num" type="number" bind:value={displayValue} min="1" />
     <select class="timing-unit" bind:value={displayUnit}>
-      <option value="seconds">秒</option>
-      <option value="minutes">分钟</option>
-      <option value="hours">小时</option>
+      <option value="seconds">{$t.unitSeconds}</option>
+      <option value="minutes">{$t.unitMinutes}</option>
+      <option value="hours">{$t.unitHours}</option>
     </select>
   </div>
 
@@ -160,15 +146,13 @@
           </svg>
         {/if}
       </span>
-      <span>提醒时播放提示音</span>
+      <span>{$t.playSound}</span>
     </label>
-    <button class="btn-listen" onclick={playBeep} title="试听提示音">
-      🔊 试听
-    </button>
+    <button class="btn-listen" onclick={playBeep}>{$t.listenBtn}</button>
   </div>
 
   <div class="preview">
-    <div class="preview-label">预览</div>
+    <div class="preview-label">{$t.preview}</div>
     <div class="preview-box">
       <p class="preview-text">{text || "…"}</p>
       <p class="preview-timer">{formatPreviewTimer(displaySeconds())}</p>
@@ -177,10 +161,10 @@
 
   <div class="actions">
     <button class="btn-save" onclick={handleSubmit}>
-      {isNew ? "创建提醒" : "保存修改"}
+      {isNew ? $t.createBtn : $t.saveBtn}
     </button>
     {#if !isNew}
-      <button class="btn-delete" onclick={handleDelete}>删除</button>
+      <button class="btn-delete" onclick={handleDelete}>{$t.deleteBtn}</button>
     {/if}
   </div>
 </div>
@@ -201,7 +185,6 @@
     flex: 1;
     min-height: 80px;
   }
-
   .text-input:focus {
     border-color: var(--border-focus);
     box-shadow: 0 0 0 3px var(--accent-soft);
@@ -221,7 +204,6 @@
     gap: 6px;
     flex-wrap: nowrap;
   }
-
   .timing-label {
     font-size: 13px;
     color: var(--text-secondary);
@@ -242,7 +224,6 @@
     transition: border-color 0.15s;
     text-align: center;
   }
-
   .timing-num:focus {
     border-color: var(--border-focus);
     box-shadow: 0 0 0 2px var(--accent-soft);
@@ -267,7 +248,6 @@
     background-position: right 6px center;
     padding-right: 20px;
   }
-
   .timing-unit:focus {
     border-color: var(--border-focus);
     box-shadow: 0 0 0 2px var(--accent-soft);
@@ -287,11 +267,9 @@
     cursor: pointer;
     font-size: 14px;
   }
-
   .checkbox-field input {
     display: none;
   }
-
   .check-box {
     width: 20px;
     height: 20px;
@@ -304,7 +282,6 @@
     transition: all 0.15s;
     flex-shrink: 0;
   }
-
   .checkbox-field input:checked + .check-box {
     background: var(--accent);
     border-color: var(--accent);
@@ -322,7 +299,6 @@
     transition: all 0.15s;
     white-space: nowrap;
   }
-
   .btn-listen:hover {
     border-color: var(--accent);
     color: var(--accent);
@@ -333,7 +309,6 @@
     flex-direction: column;
     gap: 8px;
   }
-
   .preview-label {
     font-size: 12px;
     font-weight: 500;
@@ -341,7 +316,6 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
-
   .preview-box {
     background: rgba(0, 0, 0, 0.85);
     border-radius: var(--radius);
@@ -349,7 +323,6 @@
     text-align: center;
     border: 1px solid var(--border);
   }
-
   .preview-text {
     font-size: 18px;
     font-weight: 500;
@@ -357,7 +330,6 @@
     line-height: 1.6;
     margin-bottom: 12px;
   }
-
   .preview-timer {
     font-size: 32px;
     font-weight: 700;
@@ -370,7 +342,6 @@
     gap: 10px;
     margin-top: 8px;
   }
-
   .btn-save {
     flex: 1;
     padding: 12px;
@@ -384,12 +355,10 @@
     font-family: "Noto Sans SC", sans-serif;
     transition: all 0.15s;
   }
-
   .btn-save:hover {
     filter: brightness(1.15);
     box-shadow: 0 0 20px var(--accent-glow);
   }
-
   .btn-delete {
     padding: 12px 20px;
     background: var(--danger-soft);
@@ -402,7 +371,6 @@
     font-family: "Noto Sans SC", sans-serif;
     transition: all 0.15s;
   }
-
   .btn-delete:hover {
     border-color: var(--danger);
   }

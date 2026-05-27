@@ -4,13 +4,13 @@ export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-export function createDefaultReminder() {
+export function createDefaultReminder(tr) {
   return {
     id: uid(),
-    name: "新提醒",
-    text: "休息一下，活动活动 👀",
+    name: tr?.defaultName ?? "新提醒",
+    text: tr?.defaultText ?? "休息一下，活动活动 👀",
     interval_secs: 1800,
-    display_secs: 300, // 5 min
+    display_secs: 300,
     enabled: true,
     play_sound: true,
   };

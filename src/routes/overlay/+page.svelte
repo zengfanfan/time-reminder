@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+  import { t, initLocale } from "$lib/i18n.js";
 
   let visible = $state(false);
   let text = $state("");
@@ -9,6 +10,7 @@
   let win = null;
 
   onMount(async () => {
+    initLocale();
     win = getCurrentWebviewWindow();
 
     await win.listen("show-reminder", (event) => {
@@ -78,7 +80,7 @@
   <div class="overlay">
     <div class="backdrop"></div>
 
-    <button class="btn-dismiss" onclick={dismiss} title="提前退出">
+    <button class="btn-dismiss" onclick={dismiss} title={$t.dismiss}>
       <svg
         width="22"
         height="22"
@@ -89,7 +91,7 @@
       >
         <path d="M18 6L6 18M6 6l12 12" />
       </svg>
-      <span>退出</span>
+      <span>{$t.dismiss}</span>
     </button>
 
     <div class="center-content">
@@ -101,7 +103,7 @@
         <span class="timer">{formatCountdown(countdown)}</span>
       </div>
       <p class="message">{text}</p>
-      <p class="hint">倒计时结束后自动关闭 · 右上角可提前退出</p>
+      <p class="hint">{$t.dismissHint}</p>
     </div>
   </div>
 {/if}
