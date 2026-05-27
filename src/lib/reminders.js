@@ -16,6 +16,10 @@ export function createDefaultReminder(tr) {
   };
 }
 
+export async function getCountdowns() {
+  return await invoke("get_countdowns");
+}
+
 export async function loadReminders() {
   return await invoke("get_reminders");
 }

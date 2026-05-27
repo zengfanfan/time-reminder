@@ -34,12 +34,6 @@
         "focus": true
       }
     ],
-    "trayIcon": {
-      "id": "main",
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "tooltip": "TimeVeil"
-    },
     "security": {
       "csp": null
     }

@@ -1,6 +1,7 @@
 <script>
   import { onMount, tick } from "svelte";
   import { get } from "svelte/store";
+  import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
   import {
     loadReminders,
@@ -8,6 +9,7 @@
     deleteReminder,
     toggleReminder,
     createDefaultReminder,
+    getCountdowns,
   } from "$lib/reminders.js";
   import {
     locale,
@@ -18,6 +20,7 @@
     formatCountdownLocale,
   } from "$lib/i18n.js";
   import ReminderEditor from "$lib/ReminderEditor.svelte";
+  import SettingsPanel from "$lib/SettingsPanel.svelte";
 
   let reminders = $state([]);
   let editing = $state(null);
@@ -27,6 +30,8 @@
   let nameInput;
   let triggerSave = $state(0);
   let countdowns = $state({});
+  let initialized = false;
+  let showSettings = $state(false);
 
   onMount(async () => {
     initLocale();
@@ -34,22 +39,95 @@
     loading = false;
 
     const win = getCurrentWebviewWindow();
+
+    // Tray menu can open settings
+    await win.listen("open-settings", () => {
+      showSettings = true;
+      editing = null;
+    });
+
+    // Minimize to tray: poll window state every 500ms, only act on state change
+    let wasMinimized = false;
+    setInterval(async () => {
+      const minimized = await win.isMinimized();
+      if (minimized && !wasMinimized) {
+        wasMinimized = true;
+        const cfg = await invoke("get_app_config");
+        if (cfg.minimize_to_tray) {
+          await invoke("hide_main_window");
+        }
+      } else if (!minimized) {
+        wasMinimized = false;
+      }
+    }, 500);
+
+    // Poll every 200ms until scheduler has data (usually ready within 1s)
+    const initPoll = setInterval(async () => {
+      const data = await getCountdowns();
+      if (data.length > 0) {
+        clearInterval(initPoll);
+        const map = {};
+        for (const item of data) map[item.id] = item.remaining;
+        countdowns = map;
+        initialized = true;
+      }
+    }, 200);
+
+    // Frontend ticks independently
+    setInterval(() => {
+      if (!initialized) return;
+      countdowns = Object.fromEntries(
+        Object.entries(countdowns).map(([id, v]) => [id, Math.max(0, v - 1)]),
+      );
+    }, 1000);
+
+    // Backend broadcast corrects drift every 10s
     await win.listen("countdown-tick", (event) => {
-      const map = {};
-      for (const item of event.payload) map[item.id] = item.remaining;
-      countdowns = map;
+      const incoming = {};
+      for (const item of event.payload) incoming[item.id] = item.remaining;
+
+      if (!initialized) {
+        countdowns = incoming;
+        initialized = true;
+        return;
+      }
+
+      const corrected = { ...countdowns };
+      let changed = false;
+      for (const [id, serverVal] of Object.entries(incoming)) {
+        const local = countdowns[id];
+        if (local === undefined || Math.abs(local - serverVal) > 2) {
+          corrected[id] = serverVal;
+          changed = true;
+        }
+      }
+      for (const [id, val] of Object.entries(incoming)) {
+        if (!(id in countdowns)) {
+          corrected[id] = val;
+          changed = true;
+        }
+      }
+      for (const id of Object.keys(countdowns)) {
+        if (!(id in incoming)) {
+          delete corrected[id];
+          changed = true;
+        }
+      }
+      if (changed) countdowns = corrected;
     });
   });
 
   function handleKeydown(e) {
-    if (!editing) return;
-    const tag = e.target.tagName;
     if (e.key === "Escape") {
       e.preventDefault();
-      handleBack();
-    } else if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "SELECT") {
-      e.preventDefault();
-      triggerSave++;
+      if (editing) handleBack();
+      else if (showSettings) showSettings = false;
+    } else if (editing && e.key === "Enter") {
+      const tag = e.target.tagName;
+      if (tag !== "TEXTAREA" && tag !== "SELECT") {
+        e.preventDefault();
+        triggerSave++;
+      }
     }
   }
 
@@ -77,6 +155,9 @@
   }
 
   async function handleToggle(id, enabled) {
+    // Immediately clear the countdown for this id to prevent flash of stale value
+    const { [id]: _, ...rest } = countdowns;
+    countdowns = rest;
     await toggleReminder(id, enabled);
     reminders = await loadReminders();
   }
@@ -93,6 +174,7 @@
   function handleBack() {
     editing = null;
     isNew = false;
+    showSettings = false;
   }
 </script>
 
@@ -123,6 +205,20 @@
         bind:value={editingName}
         placeholder={$t.titlePlaceholder}
       />
+    {:else if showSettings}
+      <button class="btn-icon" onclick={handleBack}>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <h1>{$t.settings}</h1>
     {:else}
       <div class="logo">
         <svg
@@ -146,6 +242,28 @@
       >
         {$locale === "zh" ? "EN" : "中"}
       </button>
+      <button
+        class="btn-icon"
+        onclick={() => {
+          showSettings = !showSettings;
+          editing = null;
+        }}
+        title={$t.settings}
+      >
+        <svg
+          width="17"
+          height="17"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+          />
+        </svg>
+      </button>
     {/if}
   </header>
 
@@ -159,6 +277,8 @@
         onSave={handleSave}
         onDelete={handleDelete}
       />
+    {:else if showSettings}
+      <SettingsPanel onClose={() => (showSettings = false)} />
     {:else if loading}
       <div class="empty"><p class="muted">{$t.loading}</p></div>
     {:else if reminders.length === 0}
@@ -184,9 +304,10 @@
               <div class="card-bottom">
                 <div class="card-preview">"{r.text}"</div>
                 {#if r.enabled && countdowns[r.id] !== undefined}
-                  <span class="card-countdown"
-                    >{formatCountdownLocale(countdowns[r.id], $t)}</span
-                  >
+                  {@const cd = formatCountdownLocale(countdowns[r.id], $t)}
+                  {#if cd !== null}
+                    <span class="card-countdown">{cd}</span>
+                  {/if}
                 {/if}
               </div>
             </button>
@@ -206,7 +327,7 @@
     {/if}
   </main>
 
-  {#if !editing}
+  {#if !editing && !showSettings}
     <footer class="bottombar">
       <button class="btn-add" onclick={handleAdd}>
         <svg

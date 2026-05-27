@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
-/// Holds the id of the reminder whose timer should be reset, or None if no reset needed.
-/// "NEW" is a special sentinel meaning a brand-new reminder was added.
 pub static RESET_ID: Mutex<Option<String>> = Mutex::new(None);
+pub static LAST_COUNTDOWNS: Mutex<Option<Vec<(String, u64)>>> = Mutex::new(None);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReminderConfig {
     pub id: String,
     pub name: String,
@@ -76,6 +76,20 @@ impl ReminderManager {
         }
     }
 
+    /// Returns (is_new, needs_timer_reset).
+    /// needs_timer_reset is true when interval_secs changed or it's a new reminder.
+    /// Name/text/display_secs/play_sound changes do NOT reset the timer.
+    pub fn upsert_checked(&mut self, config: ReminderConfig) -> (bool, bool) {
+        if let Some(existing) = self.reminders.iter_mut().find(|r| r.id == config.id) {
+            let interval_changed = existing.interval_secs != config.interval_secs;
+            *existing = config;
+            (false, interval_changed)
+        } else {
+            self.reminders.push(config);
+            (true, true) // new reminder always resets
+        }
+    }
+
     pub fn remove(&mut self, id: &str) {
         self.reminders.retain(|r| r.id != id);
     }
@@ -88,11 +102,11 @@ impl ReminderManager {
 }
 
 pub async fn start_scheduler(app: tauri::AppHandle) {
-    use std::collections::HashMap;
     use tokio::time::{interval, Duration};
 
     let mut last_triggered: HashMap<String, tokio::time::Instant> = HashMap::new();
     let mut tick = interval(Duration::from_secs(1));
+    let mut broadcast_counter: u32 = 10; // start at 10 so first tick broadcasts immediately
 
     loop {
         tick.tick().await;
@@ -109,6 +123,8 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
         if let Some(id) = reset_id {
             // Reset only this reminder's timer
             last_triggered.insert(id, tokio::time::Instant::now());
+            // Force immediate broadcast so frontend syncs right away
+            broadcast_counter = 10;
         }
 
         let reminders = {
@@ -161,8 +177,8 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             }
         }
 
-        // Broadcast remaining seconds for each reminder to the main window
-        let countdown_payload: Vec<serde_json::Value> = reminders
+        // Always update the snapshot (used by get_countdowns command)
+        let snapshot: Vec<(String, u64)> = reminders
             .iter()
             .map(|r| {
                 let remaining = if r.enabled {
@@ -176,12 +192,25 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
                 } else {
                     0
                 };
-                serde_json::json!({ "id": r.id, "remaining": remaining })
+                (r.id.clone(), remaining)
             })
             .collect();
+        if let Ok(mut lock) = LAST_COUNTDOWNS.lock() {
+            *lock = Some(snapshot.clone());
+        }
 
-        if let Some(main) = app.get_webview_window("main") {
-            let _ = main.emit("countdown-tick", countdown_payload);
+        // Broadcast to main window every 10s for drift correction
+        broadcast_counter += 1;
+        let should_broadcast = broadcast_counter >= 10;
+        if should_broadcast {
+            broadcast_counter = 0;
+            let payload: Vec<serde_json::Value> = snapshot
+                .iter()
+                .map(|(id, remaining)| serde_json::json!({ "id": id, "remaining": remaining }))
+                .collect();
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.emit("countdown-tick", payload);
+            }
         }
     }
 }

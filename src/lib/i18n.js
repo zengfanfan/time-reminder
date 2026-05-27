@@ -27,6 +27,13 @@ const translations = {
         dismiss: "退出",
         dismissHint: "倒计时结束后自动关闭 · 右上角可提前退出",
         upcoming: "即将提醒",
+        settings: "配置",
+        settingsAutostart: "开机启动",
+        settingsAutostartDesc: "系统启动时自动运行 TimeVeil",
+        settingsQuitOnClose: "关闭时退出",
+        settingsQuitOnCloseDesc: "点击关闭按钮时退出程序，默认为隐藏到托盘",
+        settingsMinimizeToTray: "最小化到托盘",
+        settingsMinimizeToTrayDesc: "点击最小化按钮时隐藏到系统托盘",
         unitSeconds: "秒",
         unitMinutes: "分钟",
         unitHours: "小时",
@@ -63,6 +70,13 @@ const translations = {
         dismiss: "Dismiss",
         dismissHint: "Auto-closes when countdown ends · Click top-right to dismiss early",
         upcoming: "Due soon",
+        settings: "Settings",
+        settingsAutostart: "Launch at startup",
+        settingsAutostartDesc: "Automatically start TimeVeil when the system boots",
+        settingsQuitOnClose: "Quit on close",
+        settingsQuitOnCloseDesc: "Exit the app when the close button is clicked; default is hide to tray",
+        settingsMinimizeToTray: "Minimize to tray",
+        settingsMinimizeToTrayDesc: "Hide to system tray when the minimize button is clicked",
         unitSeconds: "sec",
         unitMinutes: "min",
         unitHours: "hr",
@@ -118,12 +132,10 @@ export function formatDurationLocale(secs, tr) {
     return tr.durationH(h, m);
 }
 
-export function formatCountdownLocale(secs, tr) {
-    if (secs <= 0) return tr.upcoming;
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    if (h >= 1) return tr.countdownH(h, m);
-    if (m > 0) return tr.countdownM(m, s);
-    return tr.countdownS(s);
+export function formatCountdownLocale(secs, _tr) {
+    if (secs >= 3600) return null; // hide when over 1 hour
+    const s = Math.max(0, secs);
+    const m = Math.floor(s / 60);
+    const ss = s % 60;
+    return `${m.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
 }
