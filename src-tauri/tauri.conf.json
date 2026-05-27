@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "time-veil",
+  "productName": "TimeVeil",
   "version": "0.1.0",
-  "identifier": "com.root.time-veil",
+  "identifier": "com.timeveil.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -12,11 +12,31 @@
   "app": {
     "windows": [
       {
-        "title": "time-veil",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "TimeVeil",
+        "width": 520,
+        "height": 640,
+        "resizable": true,
+        "center": true
+      },
+      {
+        "label": "overlay",
+        "url": "/overlay",
+        "title": "",
+        "visible": false,
+        "fullscreen": true,
+        "alwaysOnTop": true,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "focus": true
       }
     ],
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true,
+      "tooltip": "TimeVeil"
+    },
     "security": {
       "csp": null
     }
