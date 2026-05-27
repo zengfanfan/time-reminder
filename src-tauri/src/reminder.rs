@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, Manager};
+
+/// Global flag: set to true when reminders are saved/deleted, so scheduler resets timers
+pub static REMINDERS_CHANGED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReminderConfig {
@@ -43,6 +47,8 @@ impl ReminderManager {
         let path = config_path();
         let data = serde_json::to_string_pretty(self)?;
         fs::write(path, data)?;
+        // Signal scheduler to reset timers
+        REMINDERS_CHANGED.store(true, Ordering::Relaxed);
         Ok(())
     }
 
@@ -79,6 +85,21 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
     loop {
         tick.tick().await;
 
+        // If reminders changed, reset all timers so nothing fires immediately
+        if REMINDERS_CHANGED.swap(false, Ordering::Relaxed) {
+            let now = tokio::time::Instant::now();
+            let reminders = {
+                let state = app.state::<crate::AppState>();
+                let manager = state.reminder_manager.lock().unwrap();
+                manager.get_all()
+            };
+            // Reset all timers to "just triggered" so they wait a full interval
+            for r in &reminders {
+                last_triggered.insert(r.id.clone(), now);
+            }
+            continue;
+        }
+
         let reminders = {
             let state = app.state::<crate::AppState>();
             let manager = state.reminder_manager.lock().unwrap();
@@ -87,10 +108,19 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
 
         let now = tokio::time::Instant::now();
 
+        // Clean up timers for deleted reminders
+        let active_ids: std::collections::HashSet<String> =
+            reminders.iter().map(|r| r.id.clone()).collect();
+        last_triggered.retain(|id, _| active_ids.contains(id));
+
         for reminder in reminders.iter().filter(|r| r.enabled) {
             let should_trigger = match last_triggered.get(&reminder.id) {
                 Some(last) => now.duration_since(*last).as_secs() >= reminder.interval_secs,
-                None => true,
+                None => {
+                    // First time seeing this reminder — don't fire, just record the time
+                    last_triggered.insert(reminder.id.clone(), now);
+                    false
+                },
             };
 
             if should_trigger {

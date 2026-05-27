@@ -12,6 +12,7 @@
 
   let reminders = $state([]);
   let editing = $state(null);
+  let isNew = $state(false);
   let loading = $state(true);
 
   onMount(async () => {
@@ -20,6 +21,7 @@
   });
 
   async function handleAdd() {
+    isNew = true;
     editing = createDefaultReminder();
   }
 
@@ -27,12 +29,14 @@
     await saveReminder(config);
     reminders = await loadReminders();
     editing = null;
+    isNew = false;
   }
 
   async function handleDelete(id) {
     await deleteReminder(id);
     reminders = await loadReminders();
     editing = null;
+    isNew = false;
   }
 
   async function handleToggle(id, enabled) {
@@ -41,11 +45,13 @@
   }
 
   function handleEdit(reminder) {
+    isNew = false;
     editing = { ...reminder };
   }
 
   function handleBack() {
     editing = null;
+    isNew = false;
   }
 </script>
 
@@ -53,14 +59,28 @@
   <header class="topbar">
     {#if editing}
       <button class="btn-icon" onclick={handleBack}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
       </button>
-      <h1>{editing.name === "新提醒" ? "新建提醒" : "编辑提醒"}</h1>
+      <h1>{isNew ? "新建提醒" : "编辑提醒"}</h1>
     {:else}
       <div class="logo">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <svg
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--accent)"
+          stroke-width="2"
+        >
           <circle cx="12" cy="12" r="10" />
           <path d="M12 6v6l4 2" />
         </svg>
@@ -73,6 +93,7 @@
     {#if editing}
       <ReminderEditor
         config={editing}
+        {isNew}
         onSave={handleSave}
         onDelete={handleDelete}
       />
@@ -94,7 +115,9 @@
               <div class="card-info">
                 <span class="card-name">{r.name}</span>
                 <span class="card-meta">
-                  每 {formatDuration(r.interval_secs)} · 显示 {formatDuration(r.display_secs)}
+                  每 {formatDuration(r.interval_secs)} · 显示 {formatDuration(
+                    r.display_secs,
+                  )}
                   {#if r.play_sound}· 🔔{/if}
                 </span>
               </div>
@@ -119,7 +142,14 @@
   {#if !editing}
     <footer class="bottombar">
       <button class="btn-add" onclick={handleAdd}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+        >
           <path d="M12 5v14M5 12h14" />
         </svg>
         添加提醒

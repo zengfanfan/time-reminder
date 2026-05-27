@@ -6,9 +6,10 @@
   let text = $state("");
   let countdown = $state(0);
   let timer = null;
+  let win = null;
 
   onMount(async () => {
-    const win = getCurrentWebviewWindow();
+    win = getCurrentWebviewWindow();
 
     await win.listen("show-reminder", (event) => {
       const data = event.payload;
@@ -22,12 +23,18 @@
       timer = setInterval(() => {
         countdown--;
         if (countdown <= 0) {
-          clearInterval(timer);
-          visible = false;
+          dismiss();
         }
       }, 1000);
     });
   });
+
+  function dismiss() {
+    if (timer) clearInterval(timer);
+    timer = null;
+    visible = false;
+    if (win) win.hide();
+  }
 
   function playBeep() {
     try {
@@ -70,6 +77,21 @@
 {#if visible}
   <div class="overlay">
     <div class="backdrop"></div>
+
+    <button class="btn-dismiss" onclick={dismiss} title="提前退出">
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path d="M18 6L6 18M6 6l12 12" />
+      </svg>
+      <span>退出</span>
+    </button>
+
     <div class="center-content">
       <div class="ring">
         <svg viewBox="0 0 200 200" class="ring-svg">
@@ -79,7 +101,7 @@
         <span class="timer">{formatCountdown(countdown)}</span>
       </div>
       <p class="message">{text}</p>
-      <p class="hint">倒计时结束后自动关闭</p>
+      <p class="hint">倒计时结束后自动关闭 · 右上角可提前退出</p>
     </div>
   </div>
 {/if}
@@ -96,8 +118,12 @@
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   .backdrop {
@@ -105,6 +131,32 @@
     inset: 0;
     background: rgba(8, 10, 18, 0.92);
     backdrop-filter: blur(30px);
+  }
+
+  .btn-dismiss {
+    position: absolute;
+    top: 32px;
+    right: 40px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 10px 18px 10px 14px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    font-family: "Noto Sans SC", sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    backdrop-filter: blur(8px);
+  }
+
+  .btn-dismiss:hover {
+    background: rgba(255, 78, 106, 0.15);
+    border-color: rgba(255, 78, 106, 0.4);
+    color: #ff4e6a;
   }
 
   .center-content {
@@ -163,8 +215,13 @@
   }
 
   @keyframes ringPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
   }
 
   .timer {

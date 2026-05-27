@@ -10,7 +10,7 @@ export function createDefaultReminder() {
     name: "新提醒",
     text: "休息一下，活动活动 👀",
     interval_secs: 1800,
-    display_secs: 20,
+    display_secs: 300, // 5 min
     enabled: true,
     play_sound: true,
   };

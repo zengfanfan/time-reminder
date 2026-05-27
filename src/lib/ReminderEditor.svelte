@@ -1,20 +1,80 @@
 <script>
-  let { config, onSave, onDelete } = $props();
+  import { onMount, tick } from "svelte";
+
+  let { config, isNew, onSave, onDelete } = $props();
 
   let name = $state(config.name);
   let text = $state(config.text);
-  let intervalMin = $state(Math.floor(config.interval_secs / 60));
-  let displaySec = $state(config.display_secs);
   let playSound = $state(config.play_sound);
-  let isNew = config.name === "新提醒";
+
+  // Interval: value + unit
+  let intervalValue = $state(deriveValue(config.interval_secs));
+  let intervalUnit = $state(deriveUnit(config.interval_secs));
+
+  // Display duration: value + unit
+  let displayValue = $state(deriveValue(config.display_secs));
+  let displayUnit = $state(deriveUnit(config.display_secs));
+
+  let nameInput;
+
+  function deriveUnit(secs) {
+    if (secs >= 3600 && secs % 3600 === 0) return "hours";
+    if (secs >= 60 && secs % 60 === 0) return "minutes";
+    return "seconds";
+  }
+
+  function deriveValue(secs) {
+    if (secs >= 3600 && secs % 3600 === 0) return secs / 3600;
+    if (secs >= 60 && secs % 60 === 0) return secs / 60;
+    return secs;
+  }
+
+  function toSeconds(value, unit) {
+    if (unit === "hours") return value * 3600;
+    if (unit === "minutes") return value * 60;
+    return value;
+  }
+
+  function unitLabel(unit) {
+    if (unit === "hours") return "小时";
+    if (unit === "minutes") return "分钟";
+    return "秒";
+  }
+
+  function displaySeconds() {
+    return toSeconds(displayValue, displayUnit);
+  }
+
+  function formatPreviewTimer(secs) {
+    if (secs >= 3600) {
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = secs % 60;
+      return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    }
+    if (secs >= 60) {
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      return `${m}:${s.toString().padStart(2, "0")}`;
+    }
+    return `${secs}`;
+  }
+
+  onMount(async () => {
+    await tick();
+    if (nameInput) {
+      nameInput.focus();
+      nameInput.select();
+    }
+  });
 
   function handleSubmit() {
     onSave({
       ...config,
       name,
       text,
-      interval_secs: intervalMin * 60,
-      display_secs: displaySec,
+      interval_secs: toSeconds(intervalValue, intervalUnit),
+      display_secs: toSeconds(displayValue, displayUnit),
       play_sound: playSound,
       enabled: config.enabled,
     });
@@ -25,47 +85,113 @@
       onDelete(config.id);
     }
   }
+
+  function playBeep() {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 660;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.5);
+      setTimeout(() => {
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.frequency.value = 880;
+        osc2.type = "sine";
+        gain2.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        osc2.start(ctx.currentTime);
+        osc2.stop(ctx.currentTime + 0.5);
+      }, 300);
+    } catch (e) {
+      console.warn("Audio playback failed:", e);
+    }
+  }
 </script>
 
 <div class="editor">
   <div class="field">
     <label for="name">提醒名称</label>
-    <input id="name" type="text" bind:value={name} placeholder="例：护眼提醒" />
+    <input
+      bind:this={nameInput}
+      id="name"
+      type="text"
+      bind:value={name}
+      placeholder="例：护眼提醒"
+    />
   </div>
 
   <div class="field">
     <label for="text">显示文本</label>
-    <textarea id="text" bind:value={text} rows="3" placeholder="遮挡屏幕时显示的文字…"></textarea>
+    <textarea
+      id="text"
+      bind:value={text}
+      rows="3"
+      placeholder="遮挡屏幕时显示的文字…"
+    ></textarea>
   </div>
 
-  <div class="field-row">
-    <div class="field">
-      <label for="interval">提醒间隔（分钟）</label>
-      <input id="interval" type="number" bind:value={intervalMin} min="1" max="480" />
-    </div>
-    <div class="field">
-      <label for="duration">显示时长（秒）</label>
-      <input id="duration" type="number" bind:value={displaySec} min="5" max="600" />
+  <div class="field">
+    <label for="interval">提醒间隔</label>
+    <div class="input-with-unit">
+      <input id="interval" type="number" bind:value={intervalValue} min="1" />
+      <select bind:value={intervalUnit}>
+        <option value="seconds">秒</option>
+        <option value="minutes">分钟</option>
+        <option value="hours">小时</option>
+      </select>
     </div>
   </div>
 
-  <label class="checkbox-field">
-    <input type="checkbox" bind:checked={playSound} />
-    <span class="check-box">
-      {#if playSound}
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
-      {/if}
-    </span>
-    <span>提醒时播放提示音 🔔</span>
-  </label>
+  <div class="field">
+    <label for="duration">显示时长</label>
+    <div class="input-with-unit">
+      <input id="duration" type="number" bind:value={displayValue} min="1" />
+      <select bind:value={displayUnit}>
+        <option value="seconds">秒</option>
+        <option value="minutes">分钟</option>
+        <option value="hours">小时</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="sound-row">
+    <label class="checkbox-field">
+      <input type="checkbox" bind:checked={playSound} />
+      <span class="check-box">
+        {#if playSound}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="3"
+          >
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        {/if}
+      </span>
+      <span>提醒时播放提示音</span>
+    </label>
+    <button class="btn-listen" onclick={playBeep} title="试听提示音">
+      🔊 试听
+    </button>
+  </div>
 
   <div class="preview">
     <div class="preview-label">预览</div>
     <div class="preview-box">
       <p class="preview-text">{text || "…"}</p>
-      <p class="preview-timer">{displaySec}</p>
+      <p class="preview-timer">{formatPreviewTimer(displaySeconds())}</p>
     </div>
   </div>
 
@@ -126,8 +252,58 @@
     font-family: var(--mono);
   }
 
-  .field-row {
+  .input-with-unit {
     display: flex;
+    gap: 8px;
+  }
+
+  .input-with-unit input {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: var(--mono);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .input-with-unit input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .input-with-unit select {
+    width: 80px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: "Noto Sans SC", sans-serif;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b8fa3' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+  }
+
+  .input-with-unit select:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .sound-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 12px;
   }
 
@@ -137,7 +313,6 @@
     gap: 10px;
     cursor: pointer;
     font-size: 14px;
-    padding: 10px 0;
   }
 
   .checkbox-field input {
@@ -160,6 +335,24 @@
   .checkbox-field input:checked + .check-box {
     background: var(--accent);
     border-color: var(--accent);
+  }
+
+  .btn-listen {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: "Noto Sans SC", sans-serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-listen:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .preview {

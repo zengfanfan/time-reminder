@@ -3,7 +3,7 @@ mod reminder;
 use reminder::ReminderManager;
 use std::sync::Mutex;
 use tauri::{
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    tray::{MouseButton, MouseButtonState, TrayIconEvent},
     Manager, WindowEvent,
 };
 use tauri_plugin_autostart::MacosLauncher;
@@ -62,24 +62,22 @@ pub fn run() {
             toggle_reminder,
         ])
         .setup(|app| {
-            // Tray icon
-            let _tray = TrayIconBuilder::new()
-                .tooltip("TimeVeil")
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
+            // Use the tray icon defined in tauri.conf.json, just attach the event handler
+            let tray = app.tray_by_id("main").expect("tray not found");
+            tray.on_tray_icon_event(|tray, event| {
+                if let TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    let app = tray.app_handle();
+                    if let Some(win) = app.get_webview_window("main") {
+                        let _ = win.show();
+                        let _ = win.set_focus();
                     }
-                })
-                .build(app)?;
+                }
+            });
 
             // Start scheduler in a dedicated thread with its own Tokio runtime
             let app_handle = app.handle().clone();
