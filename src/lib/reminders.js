@@ -13,6 +13,7 @@ export function createDefaultReminder(tr) {
     display_secs: 300,
     enabled: true,
     play_sound: true,
+    fullscreen: false,
   };
 }
 

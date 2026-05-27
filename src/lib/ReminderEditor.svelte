@@ -7,6 +7,7 @@
 
   let text = $state(config.text);
   let playSound = $state(config.play_sound);
+  let fullscreen = $state(config.fullscreen ?? false);
 
   let intervalValue = $state(deriveValue(config.interval_secs));
   let intervalUnit = $state(deriveUnit(config.interval_secs));
@@ -67,6 +68,7 @@
       interval_secs: toSeconds(intervalValue, intervalUnit),
       display_secs: toSeconds(displayValue, displayUnit),
       play_sound: playSound,
+      fullscreen,
       enabled: config.enabled,
     });
   }
@@ -178,12 +180,99 @@
     <button class="btn-listen" onclick={playBeep}>{$t.listenBtn}</button>
   </div>
 
+  <!-- fullscreen toggle row -->
+  <div class="fullscreen-row">
+    <div class="fullscreen-left">
+      <label class="checkbox-field" for="fs-checkbox">
+        <input id="fs-checkbox" type="checkbox" bind:checked={fullscreen} />
+        <span class="check-box">
+          {#if fullscreen}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fff"
+              stroke-width="3"
+            >
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          {/if}
+        </span>
+        <span class="fullscreen-label-text">{$t.fullscreenLabel}</span>
+      </label>
+      <span class="fullscreen-desc">{$t.fullscreenDesc}</span>
+    </div>
+    <!-- mini visual hint -->
+    <div class="fs-hint" class:fs-hint--on={fullscreen}>
+      {#if fullscreen}
+        <div class="fs-icon fs-icon--full">
+          <svg width="28" height="20" viewBox="0 0 28 20" fill="none">
+            <rect
+              x="1"
+              y="1"
+              width="26"
+              height="18"
+              rx="2"
+              fill="var(--accent-soft)"
+              stroke="var(--accent)"
+              stroke-width="1.5"
+            />
+            <rect
+              x="4"
+              y="4"
+              width="20"
+              height="12"
+              rx="1"
+              fill="var(--accent)"
+              opacity="0.25"
+            />
+          </svg>
+        </div>
+      {:else}
+        <div class="fs-icon fs-icon--corner">
+          <svg width="28" height="20" viewBox="0 0 28 20" fill="none">
+            <rect
+              x="1"
+              y="1"
+              width="26"
+              height="18"
+              rx="2"
+              fill="none"
+              stroke="var(--border)"
+              stroke-width="1.5"
+            />
+            <rect
+              x="16"
+              y="11"
+              width="10"
+              height="7"
+              rx="1.5"
+              fill="var(--accent-soft)"
+              stroke="var(--accent)"
+              stroke-width="1.2"
+            />
+          </svg>
+        </div>
+      {/if}
+    </div>
+  </div>
+
   <div class="preview">
     <div class="preview-label">{$t.preview}</div>
-    <div class="preview-box">
-      <p class="preview-text">{text || "…"}</p>
-      <p class="preview-timer">{formatPreviewTimer(displaySeconds())}</p>
-    </div>
+    {#if fullscreen}
+      <div class="preview-box preview-box--fullscreen">
+        <p class="preview-text">{text || "…"}</p>
+        <p class="preview-timer">{formatPreviewTimer(displaySeconds())}</p>
+      </div>
+    {:else}
+      <div class="preview-box preview-box--corner">
+        <div class="corner-card">
+          <p class="corner-text">{text || "…"}</p>
+          <p class="corner-timer">{formatPreviewTimer(displaySeconds())}</p>
+        </div>
+      </div>
+    {/if}
   </div>
 
   <div class="actions">
@@ -298,6 +387,7 @@
     box-shadow: 0 0 0 2px var(--accent-soft);
   }
 
+  /* ── sound row ── */
   .sound-row {
     display: flex;
     align-items: center;
@@ -349,6 +439,47 @@
     color: var(--accent);
   }
 
+  /* ── fullscreen row ── */
+  .fullscreen-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+
+  .fullscreen-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .fullscreen-label-text {
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+
+  .fullscreen-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .fs-hint {
+    flex-shrink: 0;
+    opacity: 0.85;
+    transition: opacity 0.2s;
+  }
+  .fs-hint--on {
+    opacity: 1;
+  }
+
+  /* ── preview ── */
   .preview {
     display: flex;
     flex-direction: column;
@@ -361,7 +492,9 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
-  .preview-box {
+
+  /* fullscreen preview (original style) */
+  .preview-box--fullscreen {
     background: rgba(0, 0, 0, 0.85);
     border-radius: var(--radius);
     padding: 28px 20px;
@@ -382,6 +515,39 @@
     color: var(--accent);
   }
 
+  /* corner notification preview */
+  .preview-box--corner {
+    background: transparent;
+    border-radius: var(--radius);
+    padding: 8px 0;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .corner-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    width: 220px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .corner-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+  .corner-timer {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--accent);
+  }
+
+  /* ── actions ── */
   .actions {
     display: flex;
     gap: 10px;
@@ -420,6 +586,7 @@
     border-color: var(--danger);
   }
 
+  /* ── delete confirm dialog ── */
   .dialog-backdrop {
     position: absolute;
     inset: 0;

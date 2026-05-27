@@ -17,6 +17,8 @@ pub struct ReminderConfig {
     pub display_secs: u64,
     pub enabled: bool,
     pub play_sound: bool,
+    #[serde(default)]
+    pub fullscreen: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -160,6 +162,7 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
                             "text": reminder.text,
                             "duration": reminder.display_secs,
                             "playSound": reminder.play_sound,
+                            "fullscreen": reminder.fullscreen,
                         }),
                     );
                     let _ = overlay.show();
