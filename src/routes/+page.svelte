@@ -16,11 +16,24 @@
   let isNew = $state(false);
   let loading = $state(true);
   let nameInput;
+  let triggerSave = $state(0); // increment to signal ReminderEditor to save
 
   onMount(async () => {
     reminders = await loadReminders();
     loading = false;
   });
+
+  function handleKeydown(e) {
+    if (!editing) return;
+    const tag = e.target.tagName;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      handleBack();
+    } else if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "SELECT") {
+      e.preventDefault();
+      triggerSave++;
+    }
+  }
 
   async function handleAdd() {
     isNew = true;
@@ -64,6 +77,8 @@
     isNew = false;
   }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="panel">
   <header class="topbar">
@@ -112,6 +127,7 @@
         config={editing}
         {isNew}
         name={editingName}
+        {triggerSave}
         onSave={handleSave}
         onDelete={handleDelete}
       />
@@ -188,7 +204,7 @@
     padding: 16px 20px;
     display: flex;
     align-items: center;
-    gap: 32px;
+    gap: 12px;
     border-bottom: 1px solid var(--border);
     -webkit-app-region: drag;
   }
@@ -200,7 +216,7 @@
   }
 
   .topbar-label {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--text-muted);
     white-space: nowrap;
@@ -213,7 +229,7 @@
     border: none;
     border-bottom: 1px solid var(--border);
     border-radius: 0;
-    padding: 4px 8px;
+    padding: 4px 2px;
     color: var(--text-primary);
     font-size: 15px;
     font-weight: 600;
@@ -258,6 +274,8 @@
     flex: 1;
     overflow-y: auto;
     padding: 12px;
+    display: flex;
+    flex-direction: column;
   }
 
   .empty {

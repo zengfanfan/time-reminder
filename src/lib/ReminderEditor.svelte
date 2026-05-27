@@ -1,7 +1,8 @@
 <script>
   import { tick } from "svelte";
 
-  let { config, isNew, onSave, onDelete, name, onNameChange } = $props();
+  let { config, isNew, onSave, onDelete, name, onNameChange, triggerSave } =
+    $props();
 
   let text = $state(config.text);
   let playSound = $state(config.play_sound);
@@ -56,6 +57,13 @@
     }
     return `${secs}`;
   }
+  let prevTriggerSave = triggerSave;
+  $effect(() => {
+    if (triggerSave > prevTriggerSave) {
+      prevTriggerSave = triggerSave;
+      handleSubmit();
+    }
+  });
 
   function handleSubmit() {
     onSave({
@@ -110,21 +118,23 @@
   <textarea
     class="text-input"
     bind:value={text}
-    rows="3"
     placeholder="遮挡屏幕时显示的文字…"
   ></textarea>
 
   <div class="timing-row">
-    <span class="timing-label">提醒间隔</span>
-    <input class="timing-num" type="number" bind:value={intervalValue} min="1" />
+    <span class="timing-label">每</span>
+    <input
+      class="timing-num"
+      type="number"
+      bind:value={intervalValue}
+      min="1"
+    />
     <select class="timing-unit" bind:value={intervalUnit}>
       <option value="seconds">秒</option>
       <option value="minutes">分钟</option>
       <option value="hours">小时</option>
     </select>
-  </div>
-  <div class="timing-row">
-    <span class="timing-label">显示时长</span>
+    <span class="timing-label">提醒一次，显示</span>
     <input class="timing-num" type="number" bind:value={displayValue} min="1" />
     <select class="timing-unit" bind:value={displayUnit}>
       <option value="seconds">秒</option>
@@ -188,6 +198,8 @@
     transition: border-color 0.15s;
     resize: none;
     width: 100%;
+    flex: 1;
+    min-height: 80px;
   }
 
   .text-input:focus {
@@ -200,6 +212,7 @@
     flex-direction: column;
     gap: 16px;
     padding: 8px;
+    height: 100%;
   }
 
   .timing-row {
@@ -217,7 +230,7 @@
   }
 
   .timing-num {
-    flex: 1;
+    width: 64px;
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: 6px;
