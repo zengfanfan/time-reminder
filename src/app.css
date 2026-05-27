@@ -20,9 +20,9 @@
   --danger-soft: rgba(255, 78, 106, 0.1);
   --success: #34d399;
   --success-soft: rgba(52, 211, 153, 0.1);
-  --text-primary: #e8eaf0;
-  --text-secondary: #8b8fa3;
-  --text-muted: #5a5e72;
+  --text-primary: #eef;
+  --text-secondary: #99b;
+  --text-muted: #779;
   --radius: 10px;
   --mono: "JetBrains Mono", monospace;
 }

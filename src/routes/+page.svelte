@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import {
     loadReminders,
     saveReminder,
@@ -12,8 +12,10 @@
 
   let reminders = $state([]);
   let editing = $state(null);
+  let editingName = $state("");
   let isNew = $state(false);
   let loading = $state(true);
+  let nameInput;
 
   onMount(async () => {
     reminders = await loadReminders();
@@ -23,10 +25,14 @@
   async function handleAdd() {
     isNew = true;
     editing = createDefaultReminder();
+    editingName = editing.name;
+    await tick();
+    nameInput?.focus();
+    nameInput?.select();
   }
 
   async function handleSave(config) {
-    await saveReminder(config);
+    await saveReminder({ ...config, name: editingName });
     reminders = await loadReminders();
     editing = null;
     isNew = false;
@@ -44,9 +50,13 @@
     reminders = await loadReminders();
   }
 
-  function handleEdit(reminder) {
+  async function handleEdit(reminder) {
     isNew = false;
     editing = { ...reminder };
+    editingName = reminder.name;
+    await tick();
+    nameInput?.focus();
+    nameInput?.select();
   }
 
   function handleBack() {
@@ -70,7 +80,14 @@
           <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
       </button>
-      <h1>{isNew ? "新建提醒" : "编辑提醒"}</h1>
+      <span class="topbar-label">{isNew ? "新建提醒" : "编辑提醒"}</span>
+      <input
+        bind:this={nameInput}
+        class="topbar-name-input"
+        type="text"
+        bind:value={editingName}
+        placeholder="标题"
+      />
     {:else}
       <div class="logo">
         <svg
@@ -94,6 +111,7 @@
       <ReminderEditor
         config={editing}
         {isNew}
+        name={editingName}
         onSave={handleSave}
         onDelete={handleDelete}
       />
@@ -170,7 +188,7 @@
     padding: 16px 20px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 32px;
     border-bottom: 1px solid var(--border);
     -webkit-app-region: drag;
   }
@@ -179,6 +197,39 @@
     font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.02em;
+  }
+
+  .topbar-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .topbar-name-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding: 4px 8px;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: "Noto Sans SC", sans-serif;
+    outline: none;
+    -webkit-app-region: no-drag;
+    transition: border-color 0.15s;
+  }
+
+  .topbar-name-input:focus {
+    border-bottom-color: var(--border-focus);
+  }
+
+  .topbar-name-input::placeholder {
+    color: var(--text-muted);
+    font-weight: 400;
   }
 
   .logo {

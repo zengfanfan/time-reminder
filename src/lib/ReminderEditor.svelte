@@ -1,9 +1,8 @@
 <script>
-  import { onMount, tick } from "svelte";
+  import { tick } from "svelte";
 
-  let { config, isNew, onSave, onDelete } = $props();
+  let { config, isNew, onSave, onDelete, name, onNameChange } = $props();
 
-  let name = $state(config.name);
   let text = $state(config.text);
   let playSound = $state(config.play_sound);
 
@@ -14,8 +13,6 @@
   // Display duration: value + unit
   let displayValue = $state(deriveValue(config.display_secs));
   let displayUnit = $state(deriveUnit(config.display_secs));
-
-  let nameInput;
 
   function deriveUnit(secs) {
     if (secs >= 3600 && secs % 3600 === 0) return "hours";
@@ -59,14 +56,6 @@
     }
     return `${secs}`;
   }
-
-  onMount(async () => {
-    await tick();
-    if (nameInput) {
-      nameInput.focus();
-      nameInput.select();
-    }
-  });
 
   function handleSubmit() {
     onSave({
@@ -118,49 +107,30 @@
 </script>
 
 <div class="editor">
-  <div class="field">
-    <label for="name">提醒名称</label>
-    <input
-      bind:this={nameInput}
-      id="name"
-      type="text"
-      bind:value={name}
-      placeholder="例：护眼提醒"
-    />
-  </div>
+  <textarea
+    class="text-input"
+    bind:value={text}
+    rows="3"
+    placeholder="遮挡屏幕时显示的文字…"
+  ></textarea>
 
-  <div class="field">
-    <label for="text">显示文本</label>
-    <textarea
-      id="text"
-      bind:value={text}
-      rows="3"
-      placeholder="遮挡屏幕时显示的文字…"
-    ></textarea>
+  <div class="timing-row">
+    <span class="timing-label">提醒间隔</span>
+    <input class="timing-num" type="number" bind:value={intervalValue} min="1" />
+    <select class="timing-unit" bind:value={intervalUnit}>
+      <option value="seconds">秒</option>
+      <option value="minutes">分钟</option>
+      <option value="hours">小时</option>
+    </select>
   </div>
-
-  <div class="field">
-    <label for="interval">提醒间隔</label>
-    <div class="input-with-unit">
-      <input id="interval" type="number" bind:value={intervalValue} min="1" />
-      <select bind:value={intervalUnit}>
-        <option value="seconds">秒</option>
-        <option value="minutes">分钟</option>
-        <option value="hours">小时</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="field">
-    <label for="duration">显示时长</label>
-    <div class="input-with-unit">
-      <input id="duration" type="number" bind:value={displayValue} min="1" />
-      <select bind:value={displayUnit}>
-        <option value="seconds">秒</option>
-        <option value="minutes">分钟</option>
-        <option value="hours">小时</option>
-      </select>
-    </div>
+  <div class="timing-row">
+    <span class="timing-label">显示时长</span>
+    <input class="timing-num" type="number" bind:value={displayValue} min="1" />
+    <select class="timing-unit" bind:value={displayUnit}>
+      <option value="seconds">秒</option>
+      <option value="minutes">分钟</option>
+      <option value="hours">小时</option>
+    </select>
   </div>
 
   <div class="sound-row">
@@ -206,30 +176,7 @@
 </div>
 
 <style>
-  .editor {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding: 8px;
-  }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex: 1;
-  }
-
-  .field label {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .field input,
-  .field textarea {
+  .text-input {
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -240,47 +187,60 @@
     outline: none;
     transition: border-color 0.15s;
     resize: none;
+    width: 100%;
   }
 
-  .field input:focus,
-  .field textarea:focus {
+  .text-input:focus {
     border-color: var(--border-focus);
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
-  .field input[type="number"] {
-    font-family: var(--mono);
-  }
-
-  .input-with-unit {
+  .editor {
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    gap: 16px;
+    padding: 8px;
   }
 
-  .input-with-unit input {
+  .timing-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .timing-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .timing-num {
     flex: 1;
     background: var(--bg-input);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: 6px;
+    padding: 6px 8px;
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     font-family: var(--mono);
     outline: none;
     transition: border-color 0.15s;
+    text-align: center;
   }
 
-  .input-with-unit input:focus {
+  .timing-num:focus {
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    box-shadow: 0 0 0 2px var(--accent-soft);
   }
 
-  .input-with-unit select {
-    width: 80px;
+  .timing-unit {
+    width: 72px;
     background: var(--bg-input);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 8px;
+    border-radius: 6px;
+    padding: 6px 4px 6px 8px;
     color: var(--text-primary);
     font-size: 13px;
     font-family: "Noto Sans SC", sans-serif;
@@ -289,15 +249,15 @@
     transition: border-color 0.15s;
     -webkit-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b8fa3' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238b8fa3' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 8px center;
-    padding-right: 24px;
+    background-position: right 6px center;
+    padding-right: 20px;
   }
 
-  .input-with-unit select:focus {
+  .timing-unit:focus {
     border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    box-shadow: 0 0 0 2px var(--accent-soft);
   }
 
   .sound-row {
