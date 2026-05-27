@@ -46,20 +46,18 @@
       editing = null;
     });
 
-    // Minimize to tray: poll window state every 500ms, only act on state change
-    let wasMinimized = false;
-    setInterval(async () => {
+    // Minimize to tray: blur and resize both fire on minimize; check isMinimized() in each
+    async function checkMinimized() {
       const minimized = await win.isMinimized();
-      if (minimized && !wasMinimized) {
-        wasMinimized = true;
+      if (minimized) {
         const cfg = await invoke("get_app_config");
         if (cfg.minimize_to_tray) {
           await invoke("hide_main_window");
         }
-      } else if (!minimized) {
-        wasMinimized = false;
       }
-    }, 500);
+    }
+    await win.listen("tauri://blur", checkMinimized);
+    await win.onResized(checkMinimized);
 
     // Poll every 200ms until scheduler has data (usually ready within 1s)
     const initPoll = setInterval(async () => {
@@ -235,11 +233,7 @@
         <h1>{$t.appName}</h1>
       </div>
       <div class="topbar-spacer"></div>
-      <button
-        class="btn-lang"
-        onclick={toggleLocale}
-        title="切换语言 / Switch language"
-      >
+      <button class="btn-lang" onclick={toggleLocale} title={$t.switchLanguage}>
         {$locale === "zh" ? "EN" : "中"}
       </button>
       <button

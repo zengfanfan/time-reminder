@@ -8,7 +8,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WindowEvent,
 };
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_autostart::ManagerExt;
 
 // ── App config ────────────────────────────────────────────────────────────────
 
@@ -17,11 +17,17 @@ pub struct AppConfig {
     pub autostart: bool,
     pub quit_on_close: bool,
     pub minimize_to_tray: bool,
+    pub locale: String,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self { autostart: false, quit_on_close: false, minimize_to_tray: false }
+        Self {
+            autostart: false,
+            quit_on_close: false,
+            minimize_to_tray: false,
+            locale: "en".to_string(),
+        }
     }
 }
 
@@ -133,10 +139,11 @@ fn set_autostart(
     } else {
         mgr.disable().map_err(|e| e.to_string())?;
     }
+    // Read back actual system state to confirm
+    let actual = mgr.is_enabled().unwrap_or(enabled);
     let mut cfg = state.app_config.lock().unwrap();
-    cfg.autostart = enabled;
+    cfg.autostart = actual;
     cfg.save();
-    // Sync tray menu checkbox
     sync_tray_menu(&app, &cfg);
     Ok(())
 }
@@ -165,6 +172,14 @@ fn set_minimize_to_tray(
     cfg.save();
     sync_tray_menu(&app, &cfg);
     Ok(())
+}
+
+#[tauri::command]
+fn set_locale(app: AppHandle, state: tauri::State<'_, AppState>, locale: String) {
+    let mut cfg = state.app_config.lock().unwrap();
+    cfg.locale = locale;
+    cfg.save();
+    sync_tray_menu(&app, &cfg);
 }
 
 #[tauri::command]
@@ -207,17 +222,36 @@ fn sync_tray_menu(app: &AppHandle, cfg: &AppConfig) {
 
 fn build_tray_menu(app: &AppHandle, cfg: &AppConfig) -> tauri::Result<Menu<tauri::Wry>> {
     let visible = main_window_visible(app);
-    let toggle_label = if visible { "隐藏主界面" } else { "显示主界面" };
+    let zh = cfg.locale == "zh";
+
+    let toggle_label = match (visible, zh) {
+        (true, true) => "隐藏主界面",
+        (true, false) => "Hide Window",
+        (false, true) => "显示主界面",
+        (false, false) => "Show Window",
+    };
 
     let toggle_win = MenuItem::with_id(app, "toggle_win", toggle_label, true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "配置", true, None::<&str>)?;
+    let settings = MenuItem::with_id(
+        app,
+        "settings",
+        if zh { "配置" } else { "Settings" },
+        true,
+        None::<&str>,
+    )?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let autostart =
-        CheckMenuItem::with_id(app, "autostart", "开机启动", true, cfg.autostart, None::<&str>)?;
-    let quit_on_close = CheckMenuItem::with_id(
+    let autostart = CheckMenuItem::with_id(
+        app,
+        "autostart",
+        if zh { "开机启动" } else { "Launch at Startup" },
+        true,
+        cfg.autostart,
+        None::<&str>,
+    )?;
+    let quit_close = CheckMenuItem::with_id(
         app,
         "quit_on_close",
-        "关闭时退出",
+        if zh { "关闭时退出" } else { "Quit on Close" },
         true,
         cfg.quit_on_close,
         None::<&str>,
@@ -225,17 +259,18 @@ fn build_tray_menu(app: &AppHandle, cfg: &AppConfig) -> tauri::Result<Menu<tauri
     let min_tray = CheckMenuItem::with_id(
         app,
         "min_tray",
-        "最小化到托盘",
+        if zh { "最小化到托盘" } else { "Minimize to Tray" },
         true,
         cfg.minimize_to_tray,
         None::<&str>,
     )?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let quit =
+        MenuItem::with_id(app, "quit", if zh { "退出" } else { "Quit" }, true, None::<&str>)?;
 
     Menu::with_items(
         app,
-        &[&toggle_win, &settings, &sep, &autostart, &quit_on_close, &min_tray, &sep2, &quit],
+        &[&toggle_win, &settings, &sep, &autostart, &quit_close, &min_tray, &sep2, &quit],
     )
 }
 
@@ -252,7 +287,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![])))
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
@@ -265,11 +300,23 @@ pub fn run() {
             set_autostart,
             set_quit_on_close,
             set_minimize_to_tray,
+            set_locale,
             show_main_window,
             hide_main_window,
             quit_app,
         ])
         .setup(|app| {
+            // Sync autostart state from system (may differ from saved config)
+            {
+                let state = app.state::<AppState>();
+                let mut cfg = state.app_config.lock().unwrap();
+                let system_autostart = app.autolaunch().is_enabled().unwrap_or(false);
+                if cfg.autostart != system_autostart {
+                    cfg.autostart = system_autostart;
+                    cfg.save();
+                }
+            }
+
             let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
 
             // Build tray with menu
@@ -401,10 +448,12 @@ fn set_autostart_inner(app: &AppHandle, enabled: bool) {
     let mgr = app.autolaunch();
     let ok = if enabled { mgr.enable() } else { mgr.disable() };
     if ok.is_ok() {
+        // Read back the actual system state to confirm
+        let actual = mgr.is_enabled().unwrap_or(enabled);
         {
             let state = app.state::<AppState>();
             let mut cfg = state.app_config.lock().unwrap();
-            cfg.autostart = enabled;
+            cfg.autostart = actual;
             cfg.save();
         }
         let state = app.state::<AppState>();

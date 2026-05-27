@@ -1,4 +1,5 @@
 import { writable, derived } from "svelte/store";
+import { invoke } from "@tauri-apps/api/core";
 
 const STORAGE_KEY = "time-veil-locale";
 
@@ -22,12 +23,16 @@ const translations = {
         saveBtn: "保存修改",
         deleteBtn: "删除",
         deleteConfirm: "确认删除这个提醒？",
+        deleteConfirmHint: "此操作无法撤销",
+        confirmYes: "删除",
+        confirmNo: "取消",
         defaultName: "新提醒",
         defaultText: "休息一下，活动活动 👀",
         dismiss: "退出",
         dismissHint: "倒计时结束后自动关闭 · 右上角可提前退出",
         upcoming: "即将提醒",
         settings: "配置",
+        switchLanguage: "Switch to English",
         settingsAutostart: "开机启动",
         settingsAutostartDesc: "系统启动时自动运行 TimeVeil",
         settingsQuitOnClose: "关闭时退出",
@@ -65,12 +70,16 @@ const translations = {
         saveBtn: "Save Changes",
         deleteBtn: "Delete",
         deleteConfirm: "Delete this reminder?",
+        deleteConfirmHint: "This action cannot be undone",
+        confirmYes: "Delete",
+        confirmNo: "Cancel",
         defaultName: "New Reminder",
         defaultText: "Time for a break! 👀",
         dismiss: "Dismiss",
         dismissHint: "Auto-closes when countdown ends · Click top-right to dismiss early",
         upcoming: "Due soon",
         settings: "Settings",
+        switchLanguage: "切换为中文",
         settingsAutostart: "Launch at startup",
         settingsAutostartDesc: "Automatically start TimeVeil when the system boots",
         settingsQuitOnClose: "Quit on close",
@@ -106,13 +115,16 @@ function detectLocale() {
 export const locale = writable("zh"); // default, will be set on mount
 
 export function initLocale() {
-    locale.set(detectLocale());
+    const l = detectLocale();
+    locale.set(l);
+    invoke("set_locale", { locale: l }).catch(() => { });
 }
 
 export function toggleLocale() {
     locale.update((l) => {
         const next = l === "zh" ? "en" : "zh";
         try { localStorage.setItem(STORAGE_KEY, next); } catch (_) { }
+        invoke("set_locale", { locale: next }).catch(() => { });
         return next;
     });
 }

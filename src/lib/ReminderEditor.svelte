@@ -71,8 +71,33 @@
     });
   }
 
+  let showDeleteConfirm = $state(false);
+
   function handleDelete() {
-    if (confirm($t.deleteConfirm)) onDelete(config.id);
+    showDeleteConfirm = true;
+  }
+
+  function confirmDelete() {
+    showDeleteConfirm = false;
+    onDelete(config.id);
+  }
+
+  function cancelDelete() {
+    showDeleteConfirm = false;
+  }
+
+  function handleDialogKeydown(e) {
+    if (!showDeleteConfirm) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      confirmDelete();
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelDelete();
+    }
   }
 
   function playBeep() {
@@ -99,6 +124,8 @@
     }
   }
 </script>
+
+<svelte:window onkeydowncapture={handleDialogKeydown} />
 
 <div class="editor">
   <textarea
@@ -167,6 +194,23 @@
       <button class="btn-delete" onclick={handleDelete}>{$t.deleteBtn}</button>
     {/if}
   </div>
+
+  {#if showDeleteConfirm}
+    <div class="dialog-backdrop" onclick={cancelDelete}>
+      <div class="dialog" onclick={(e) => e.stopPropagation()}>
+        <p class="dialog-title">{$t.deleteConfirm}</p>
+        <p class="dialog-hint">{$t.deleteConfirmHint}</p>
+        <div class="dialog-actions">
+          <button class="dialog-cancel" onclick={cancelDelete}
+            >{$t.confirmNo}</button
+          >
+          <button class="dialog-confirm" onclick={confirmDelete}
+            >{$t.confirmYes}</button
+          >
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -196,6 +240,7 @@
     gap: 16px;
     padding: 8px;
     height: 100%;
+    position: relative;
   }
 
   .timing-row {
@@ -373,5 +418,107 @@
   }
   .btn-delete:hover {
     border-color: var(--danger);
+  }
+
+  .dialog-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: var(--radius);
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .dialog {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 24px 20px;
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .dialog-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+  }
+
+  .dialog-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 4px;
+  }
+
+  .dialog-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .dialog-cancel {
+    flex: 1;
+    padding: 9px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: "Noto Sans SC", sans-serif;
+    transition: all 0.15s;
+  }
+  .dialog-cancel:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+  }
+
+  .dialog-confirm {
+    flex: 1;
+    padding: 9px;
+    background: var(--danger-soft);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--danger);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: "Noto Sans SC", sans-serif;
+    transition: all 0.15s;
+  }
+  .dialog-confirm:hover {
+    background: var(--danger);
+    color: #fff;
   }
 </style>
