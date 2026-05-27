@@ -19,7 +19,10 @@ fn get_reminders(state: tauri::State<'_, AppState>) -> Vec<reminder::ReminderCon
 }
 
 #[tauri::command]
-fn save_reminder(state: tauri::State<'_, AppState>, config: reminder::ReminderConfig) -> Result<(), String> {
+fn save_reminder(
+    state: tauri::State<'_, AppState>,
+    config: reminder::ReminderConfig,
+) -> Result<(), String> {
     let mut manager = state.reminder_manager.lock().unwrap();
     manager.upsert(config);
     manager.save().map_err(|e| e.to_string())
@@ -33,7 +36,11 @@ fn delete_reminder(state: tauri::State<'_, AppState>, id: String) -> Result<(), 
 }
 
 #[tauri::command]
-fn toggle_reminder(state: tauri::State<'_, AppState>, id: String, enabled: bool) -> Result<(), String> {
+fn toggle_reminder(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    enabled: bool,
+) -> Result<(), String> {
     let mut manager = state.reminder_manager.lock().unwrap();
     manager.set_enabled(&id, enabled);
     manager.save().map_err(|e| e.to_string())
@@ -41,16 +48,12 @@ fn toggle_reminder(state: tauri::State<'_, AppState>, id: String, enabled: bool)
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let state = AppState {
-        reminder_manager: Mutex::new(ReminderManager::load().unwrap_or_default()),
-    };
+    let state =
+        AppState { reminder_manager: Mutex::new(ReminderManager::load().unwrap_or_default()) };
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec![]),
-        ))
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec![])))
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             get_reminders,
@@ -78,10 +81,11 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Start scheduler
+            // Start scheduler in a dedicated thread with its own Tokio runtime
             let app_handle = app.handle().clone();
-            tokio::spawn(async move {
-                reminder::start_scheduler(app_handle).await;
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+                rt.block_on(reminder::start_scheduler(app_handle));
             });
 
             Ok(())
