@@ -7,6 +7,8 @@ use tauri::{Emitter, Manager};
 
 pub static RESET_ID: Mutex<Option<String>> = Mutex::new(None);
 pub static LAST_COUNTDOWNS: Mutex<Option<Vec<(String, u64)>>> = Mutex::new(None);
+/// Set by dismiss_reminder command; scheduler resets that reminder's timer on next tick.
+pub static DISMISSED_ID: Mutex<Option<String>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReminderConfig {
@@ -68,7 +70,6 @@ impl ReminderManager {
     }
 
     pub fn upsert(&mut self, config: ReminderConfig) -> bool {
-        // Returns true if this is a new reminder (not an update)
         if let Some(existing) = self.reminders.iter_mut().find(|r| r.id == config.id) {
             *existing = config;
             false
@@ -78,9 +79,6 @@ impl ReminderManager {
         }
     }
 
-    /// Returns (is_new, needs_timer_reset).
-    /// needs_timer_reset is true when interval_secs changed or it's a new reminder.
-    /// Name/text/display_secs/play_sound changes do NOT reset the timer.
     pub fn upsert_checked(&mut self, config: ReminderConfig) -> (bool, bool) {
         if let Some(existing) = self.reminders.iter_mut().find(|r| r.id == config.id) {
             let interval_changed = existing.interval_secs != config.interval_secs;
@@ -88,7 +86,7 @@ impl ReminderManager {
             (false, interval_changed)
         } else {
             self.reminders.push(config);
-            (true, true) // new reminder always resets
+            (true, true)
         }
     }
 
@@ -103,17 +101,61 @@ impl ReminderManager {
     }
 }
 
+/// Corner notification dimensions (logical pixels)
+const CORNER_W: u32 = 340;
+const CORNER_H: u32 = 110;
+const CORNER_MARGIN: u32 = 24;
+
+fn setup_overlay_window(overlay: &tauri::WebviewWindow, fullscreen: bool) {
+    if fullscreen {
+        // Restore to fullscreen
+        let _ = overlay.set_fullscreen(true);
+    } else {
+        // Exit fullscreen first, then resize + reposition to bottom-right corner
+        let _ = overlay.set_fullscreen(false);
+
+        // Get the monitor the cursor/primary monitor occupies
+        if let Ok(Some(monitor)) = overlay.primary_monitor() {
+            let screen_size = monitor.size();
+            let scale = monitor.scale_factor();
+
+            // Convert logical corner dimensions to physical pixels
+            let phys_w = (CORNER_W as f64 * scale) as u32;
+            let phys_h = (CORNER_H as f64 * scale) as u32;
+            let margin_phys = (CORNER_MARGIN as f64 * scale) as u32;
+
+            let x = (screen_size.width.saturating_sub(phys_w + margin_phys)) as i32;
+            let y = (screen_size.height.saturating_sub(phys_h + margin_phys)) as i32;
+
+            let _ = overlay.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                width: phys_w,
+                height: phys_h,
+            }));
+            let _ =
+                overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+        } else {
+            // Fallback: fixed logical size
+            let _ = overlay.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                width: CORNER_W as f64,
+                height: CORNER_H as f64,
+            }));
+        }
+    }
+}
+
 pub async fn start_scheduler(app: tauri::AppHandle) {
     use tokio::time::{interval, Duration};
 
     let mut last_triggered: HashMap<String, tokio::time::Instant> = HashMap::new();
+    // Tracks reminders currently being displayed — their timer does NOT count down.
+    let mut displaying: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut tick = interval(Duration::from_secs(1));
-    let mut broadcast_counter: u32 = 10; // start at 10 so first tick broadcasts immediately
+    let mut broadcast_counter: u32 = 10;
 
     loop {
         tick.tick().await;
 
-        // Check if a specific reminder's timer needs resetting
+        // ── Handle save-triggered reset (interval changed / new reminder) ──
         let reset_id = {
             if let Ok(mut lock) = RESET_ID.lock() {
                 lock.take()
@@ -121,11 +163,24 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
                 None
             }
         };
-
         if let Some(id) = reset_id {
-            // Reset only this reminder's timer
-            last_triggered.insert(id, tokio::time::Instant::now());
-            // Force immediate broadcast so frontend syncs right away
+            last_triggered.insert(id.clone(), tokio::time::Instant::now());
+            displaying.remove(&id);
+            broadcast_counter = 10;
+        }
+
+        // ── Handle dismiss signal from overlay ──
+        let dismissed_id = {
+            if let Ok(mut lock) = DISMISSED_ID.lock() {
+                lock.take()
+            } else {
+                None
+            }
+        };
+        if let Some(id) = dismissed_id {
+            // Restart the interval from the moment the user finishes the break.
+            last_triggered.insert(id.clone(), tokio::time::Instant::now());
+            displaying.remove(&id);
             broadcast_counter = 10;
         }
 
@@ -137,28 +192,37 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
 
         let now = tokio::time::Instant::now();
 
-        // Clean up timers for deleted reminders
+        // Clean up stale entries
         let active_ids: std::collections::HashSet<String> =
             reminders.iter().map(|r| r.id.clone()).collect();
         last_triggered.retain(|id, _| active_ids.contains(id));
+        displaying.retain(|id| active_ids.contains(id));
 
         for reminder in reminders.iter().filter(|r| r.enabled) {
+            // While overlay is showing, freeze the countdown for this reminder.
+            if displaying.contains(&reminder.id) {
+                continue;
+            }
+
             let should_trigger = match last_triggered.get(&reminder.id) {
                 Some(last) => now.duration_since(*last).as_secs() >= reminder.interval_secs,
                 None => {
-                    // First time seeing this reminder — record time, don't fire
                     last_triggered.insert(reminder.id.clone(), now);
                     false
                 },
             };
 
             if should_trigger {
-                last_triggered.insert(reminder.id.clone(), now);
+                displaying.insert(reminder.id.clone());
 
                 if let Some(overlay) = app.get_webview_window("overlay") {
+                    // Adjust window geometry BEFORE showing
+                    setup_overlay_window(&overlay, reminder.fullscreen);
+
                     let _ = overlay.emit(
                         "show-reminder",
                         serde_json::json!({
+                            "id": reminder.id,
                             "text": reminder.text,
                             "duration": reminder.display_secs,
                             "playSound": reminder.play_sound,
@@ -166,31 +230,28 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
                         }),
                     );
                     let _ = overlay.show();
-                    let _ = overlay.set_focus();
-
-                    let app_clone = app.clone();
-                    let dur = reminder.display_secs;
-                    tokio::spawn(async move {
-                        tokio::time::sleep(Duration::from_secs(dur)).await;
-                        if let Some(win) = app_clone.get_webview_window("overlay") {
-                            let _ = win.hide();
-                        }
-                    });
+                    if reminder.fullscreen {
+                        let _ = overlay.set_focus();
+                    }
                 }
             }
         }
 
-        // Always update the snapshot (used by get_countdowns command)
+        // Snapshot for countdowns (displaying reminders show 0)
         let snapshot: Vec<(String, u64)> = reminders
             .iter()
             .map(|r| {
                 let remaining = if r.enabled {
-                    match last_triggered.get(&r.id) {
-                        Some(last) => {
-                            let elapsed = now.duration_since(*last).as_secs();
-                            r.interval_secs.saturating_sub(elapsed)
-                        },
-                        None => r.interval_secs,
+                    if displaying.contains(&r.id) {
+                        0
+                    } else {
+                        match last_triggered.get(&r.id) {
+                            Some(last) => {
+                                let elapsed = now.duration_since(*last).as_secs();
+                                r.interval_secs.saturating_sub(elapsed)
+                            },
+                            None => r.interval_secs,
+                        }
                     }
                 } else {
                     0
@@ -198,14 +259,13 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
                 (r.id.clone(), remaining)
             })
             .collect();
+
         if let Ok(mut lock) = LAST_COUNTDOWNS.lock() {
             *lock = Some(snapshot.clone());
         }
 
-        // Broadcast to main window every 10s for drift correction
         broadcast_counter += 1;
-        let should_broadcast = broadcast_counter >= 10;
-        if should_broadcast {
+        if broadcast_counter >= 10 {
             broadcast_counter = 0;
             let payload: Vec<serde_json::Value> = snapshot
                 .iter()

@@ -206,6 +206,14 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+#[tauri::command]
+fn dismiss_reminder(id: String) {
+    // Signal the scheduler to restart this reminder's interval from now.
+    if let Ok(mut lock) = reminder::DISMISSED_ID.lock() {
+        *lock = Some(id);
+    }
+}
+
 // ── Tray helpers ──────────────────────────────────────────────────────────────
 
 fn main_window_visible(app: &AppHandle) -> bool {
@@ -304,6 +312,7 @@ pub fn run() {
             show_main_window,
             hide_main_window,
             quit_app,
+            dismiss_reminder,
         ])
         .setup(|app| {
             // Sync autostart state from system (may differ from saved config)

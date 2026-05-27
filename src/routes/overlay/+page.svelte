@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { t, initLocale } from "$lib/i18n.js";
 
@@ -7,6 +8,7 @@
   let text = $state("");
   let countdown = $state(0);
   let fullscreen = $state(false);
+  let currentId = $state(""); // reminder id currently showing
   let timer = null;
   let win = null;
 
@@ -16,6 +18,7 @@
 
     await win.listen("show-reminder", (event) => {
       const data = event.payload;
+      currentId = data.id ?? "";
       text = data.text || "";
       countdown = data.duration || 20;
       fullscreen = data.fullscreen ?? false;
@@ -37,6 +40,9 @@
     if (timer) clearInterval(timer);
     timer = null;
     visible = false;
+    // Tell the backend the break is over — interval restarts from now.
+    if (currentId)
+      invoke("dismiss_reminder", { id: currentId }).catch(() => {});
     if (win) win.hide();
   }
 
@@ -80,7 +86,7 @@
 
 {#if visible}
   {#if fullscreen}
-    <!-- ── Fullscreen overlay (original) ── -->
+    <!-- ── Fullscreen overlay ── -->
     <div class="overlay">
       <div class="backdrop"></div>
 
@@ -145,9 +151,13 @@
 {/if}
 
 <style>
-  /* ════════════════════════════════════
-     Fullscreen overlay styles
-  ════════════════════════════════════ */
+  /* Make the window itself fully transparent — app.css sets body background which we must override */
+  :global(html),
+  :global(body) {
+    background: transparent !important;
+  }
+
+  /* ════ Fullscreen ════ */
   .overlay {
     position: fixed;
     inset: 0;
@@ -157,7 +167,6 @@
     justify-content: center;
     animation: fadeIn 0.4s ease-out;
   }
-
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -208,7 +217,6 @@
     gap: 32px;
     animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
-
   @keyframes slideUp {
     from {
       opacity: 0;
@@ -228,7 +236,6 @@
     align-items: center;
     justify-content: center;
   }
-
   .ring-svg {
     position: absolute;
     inset: 0;
@@ -236,13 +243,11 @@
     height: 100%;
     transform: rotate(-90deg);
   }
-
   .ring-bg {
     fill: none;
     stroke: rgba(78, 123, 255, 0.1);
     stroke-width: 4;
   }
-
   .ring-progress {
     fill: none;
     stroke: #4e7bff;
@@ -253,7 +258,6 @@
     filter: drop-shadow(0 0 12px rgba(78, 123, 255, 0.4));
     animation: ringPulse 2s ease-in-out infinite;
   }
-
   @keyframes ringPulse {
     0%,
     100% {
@@ -272,7 +276,6 @@
     letter-spacing: -0.02em;
     text-shadow: 0 0 40px rgba(78, 123, 255, 0.3);
   }
-
   .message {
     font-size: 26px;
     font-weight: 500;
@@ -281,16 +284,13 @@
     max-width: 600px;
     line-height: 1.6;
   }
-
   .hint {
     font-size: 13px;
     color: rgba(255, 255, 255, 0.3);
     letter-spacing: 0.05em;
   }
 
-  /* ════════════════════════════════════
-     Corner notification styles
-  ════════════════════════════════════ */
+  /* ════ Corner notification ════ */
   .corner-wrapper {
     position: fixed;
     bottom: 24px;
@@ -298,7 +298,6 @@
     z-index: 99999;
     animation: cornerSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   }
-
   @keyframes cornerSlideIn {
     from {
       opacity: 0;
@@ -325,13 +324,11 @@
     flex-direction: column;
     gap: 10px;
   }
-
   .corner-header {
     display: flex;
     align-items: flex-start;
     gap: 10px;
   }
-
   .corner-dot {
     flex-shrink: 0;
     margin-top: 3px;
@@ -342,7 +339,6 @@
     box-shadow: 0 0 6px rgba(78, 123, 255, 0.8);
     animation: dotPulse 2s ease-in-out infinite;
   }
-
   @keyframes dotPulse {
     0%,
     100% {
@@ -354,7 +350,6 @@
       box-shadow: 0 0 10px rgba(78, 123, 255, 0.4);
     }
   }
-
   .corner-title {
     flex: 1;
     font-size: 14px;
@@ -362,7 +357,6 @@
     color: #e8eaf0;
     line-height: 1.5;
   }
-
   .corner-close {
     flex-shrink: 0;
     background: none;
@@ -380,13 +374,11 @@
     color: #ff4e6a;
     background: rgba(255, 78, 106, 0.1);
   }
-
   .corner-footer {
     display: flex;
     align-items: center;
     gap: 10px;
   }
-
   .corner-progress-bar {
     flex: 1;
     height: 3px;
@@ -394,7 +386,6 @@
     border-radius: 2px;
     overflow: hidden;
   }
-
   .corner-progress-fill {
     height: 100%;
     width: 100%;
@@ -403,7 +394,6 @@
     transform-origin: left;
     animation: progressDrain linear forwards;
   }
-
   @keyframes progressDrain {
     from {
       transform: scaleX(1);
@@ -412,7 +402,6 @@
       transform: scaleX(0);
     }
   }
-
   .corner-timer {
     flex-shrink: 0;
     font-family: "JetBrains Mono", monospace;

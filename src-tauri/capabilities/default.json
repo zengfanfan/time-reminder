@@ -19,6 +19,10 @@
     "core:window:allow-is-visible",
     "core:window:allow-is-minimized",
     "core:window:allow-unminimize",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-primary-monitor",
     "core:event:default",
     "core:tray:allow-set-menu",
     "process:allow-exit"
