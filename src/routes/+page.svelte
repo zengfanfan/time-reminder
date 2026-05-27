@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from "svelte";
+  import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
   import {
     loadReminders,
     saveReminder,
@@ -16,12 +17,34 @@
   let isNew = $state(false);
   let loading = $state(true);
   let nameInput;
-  let triggerSave = $state(0); // increment to signal ReminderEditor to save
+  let triggerSave = $state(0);
+  let countdowns = $state({}); // { [id]: remaining_secs }
 
   onMount(async () => {
     reminders = await loadReminders();
     loading = false;
+
+    const win = getCurrentWebviewWindow();
+    await win.listen("countdown-tick", (event) => {
+      const map = {};
+      for (const item of event.payload) {
+        map[item.id] = item.remaining;
+      }
+      countdowns = map;
+    });
   });
+
+  function formatCountdown(secs) {
+    if (secs <= 0) return "即将提醒";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h >= 1) {
+      return m > 0 ? `${h}小时${m}分` : `${h}小时`;
+    }
+    if (m > 0) return `${m}分${s}秒`;
+    return `${s}秒`;
+  }
 
   function handleKeydown(e) {
     if (!editing) return;
@@ -155,7 +178,14 @@
                   {#if r.play_sound}· 🔔{/if}
                 </span>
               </div>
-              <div class="card-preview">"{r.text}"</div>
+              <div class="card-bottom">
+                <div class="card-preview">"{r.text}"</div>
+                {#if r.enabled && countdowns[r.id] !== undefined}
+                  <span class="card-countdown"
+                    >{formatCountdown(countdowns[r.id])}</span
+                  >
+                {/if}
+              </div>
             </button>
             <label class="toggle-wrap">
               <input
@@ -359,7 +389,23 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 360px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .card-bottom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  .card-countdown {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: #2dca4f;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .toggle-wrap {

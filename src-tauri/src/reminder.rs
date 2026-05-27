@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
-/// Global flag: set to true when reminders are saved/deleted, so scheduler resets timers
-pub static REMINDERS_CHANGED: AtomicBool = AtomicBool::new(false);
+/// Holds the id of the reminder whose timer should be reset, or None if no reset needed.
+/// "NEW" is a special sentinel meaning a brand-new reminder was added.
+pub static RESET_ID: Mutex<Option<String>> = Mutex::new(None);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReminderConfig {
@@ -43,12 +44,20 @@ impl ReminderManager {
         }
     }
 
-    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_silent(&self) -> Result<(), Box<dyn std::error::Error>> {
         let path = config_path();
         let data = serde_json::to_string_pretty(self)?;
         fs::write(path, data)?;
-        // Signal scheduler to reset timers
-        REMINDERS_CHANGED.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
+    pub fn save(&self, changed_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let path = config_path();
+        let data = serde_json::to_string_pretty(self)?;
+        fs::write(path, data)?;
+        if let Ok(mut lock) = RESET_ID.lock() {
+            *lock = Some(changed_id.to_string());
+        }
         Ok(())
     }
 
@@ -56,11 +65,14 @@ impl ReminderManager {
         self.reminders.clone()
     }
 
-    pub fn upsert(&mut self, config: ReminderConfig) {
+    pub fn upsert(&mut self, config: ReminderConfig) -> bool {
+        // Returns true if this is a new reminder (not an update)
         if let Some(existing) = self.reminders.iter_mut().find(|r| r.id == config.id) {
             *existing = config;
+            false
         } else {
             self.reminders.push(config);
+            true
         }
     }
 
@@ -85,19 +97,18 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
     loop {
         tick.tick().await;
 
-        // If reminders changed, reset all timers so nothing fires immediately
-        if REMINDERS_CHANGED.swap(false, Ordering::Relaxed) {
-            let now = tokio::time::Instant::now();
-            let reminders = {
-                let state = app.state::<crate::AppState>();
-                let manager = state.reminder_manager.lock().unwrap();
-                manager.get_all()
-            };
-            // Reset all timers to "just triggered" so they wait a full interval
-            for r in &reminders {
-                last_triggered.insert(r.id.clone(), now);
+        // Check if a specific reminder's timer needs resetting
+        let reset_id = {
+            if let Ok(mut lock) = RESET_ID.lock() {
+                lock.take()
+            } else {
+                None
             }
-            continue;
+        };
+
+        if let Some(id) = reset_id {
+            // Reset only this reminder's timer
+            last_triggered.insert(id, tokio::time::Instant::now());
         }
 
         let reminders = {
@@ -117,7 +128,7 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             let should_trigger = match last_triggered.get(&reminder.id) {
                 Some(last) => now.duration_since(*last).as_secs() >= reminder.interval_secs,
                 None => {
-                    // First time seeing this reminder — don't fire, just record the time
+                    // First time seeing this reminder — record time, don't fire
                     last_triggered.insert(reminder.id.clone(), now);
                     false
                 },
@@ -148,6 +159,29 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
                     });
                 }
             }
+        }
+
+        // Broadcast remaining seconds for each reminder to the main window
+        let countdown_payload: Vec<serde_json::Value> = reminders
+            .iter()
+            .map(|r| {
+                let remaining = if r.enabled {
+                    match last_triggered.get(&r.id) {
+                        Some(last) => {
+                            let elapsed = now.duration_since(*last).as_secs();
+                            r.interval_secs.saturating_sub(elapsed)
+                        },
+                        None => r.interval_secs,
+                    }
+                } else {
+                    0
+                };
+                serde_json::json!({ "id": r.id, "remaining": remaining })
+            })
+            .collect();
+
+        if let Some(main) = app.get_webview_window("main") {
+            let _ = main.emit("countdown-tick", countdown_payload);
         }
     }
 }

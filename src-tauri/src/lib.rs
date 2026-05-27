@@ -24,15 +24,16 @@ fn save_reminder(
     config: reminder::ReminderConfig,
 ) -> Result<(), String> {
     let mut manager = state.reminder_manager.lock().unwrap();
+    let id = config.id.clone();
     manager.upsert(config);
-    manager.save().map_err(|e| e.to_string())
+    manager.save(&id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_reminder(state: tauri::State<'_, AppState>, id: String) -> Result<(), String> {
     let mut manager = state.reminder_manager.lock().unwrap();
     manager.remove(&id);
-    manager.save().map_err(|e| e.to_string())
+    manager.save_silent().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -43,7 +44,7 @@ fn toggle_reminder(
 ) -> Result<(), String> {
     let mut manager = state.reminder_manager.lock().unwrap();
     manager.set_enabled(&id, enabled);
-    manager.save().map_err(|e| e.to_string())
+    manager.save_silent().map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
