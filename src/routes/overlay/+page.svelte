@@ -7,8 +7,9 @@
   let visible = $state(false);
   let text = $state("");
   let countdown = $state(0);
+  let totalDuration = $state(0); // fixed initial duration for progress bar
   let fullscreen = $state(false);
-  let currentId = $state(""); // reminder id currently showing
+  let currentId = $state("");
   let timer = null;
   let win = null;
 
@@ -21,6 +22,7 @@
       currentId = data.id ?? "";
       text = data.text || "";
       countdown = data.duration || 20;
+      totalDuration = countdown;
       fullscreen = data.fullscreen ?? false;
       visible = true;
 
@@ -138,10 +140,12 @@
         </div>
         <div class="corner-footer">
           <div class="corner-progress-bar">
-            <div
-              class="corner-progress-fill"
-              style="animation-duration: {countdown}s"
-            ></div>
+            {#key totalDuration}
+              <div
+                class="corner-progress-fill"
+                style="animation-duration: {totalDuration}s"
+              ></div>
+            {/key}
           </div>
           <span class="corner-timer">{formatCountdown(countdown)}</span>
         </div>
@@ -311,15 +315,9 @@
 
   .corner-card {
     width: 300px;
-    background: rgba(20, 22, 34, 0.96);
-    border: 1px solid rgba(78, 123, 255, 0.3);
+    background: #1a1d2e;
     border-radius: 14px;
     padding: 14px 16px 12px;
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.5),
-      0 0 0 1px rgba(78, 123, 255, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(20px);
     display: flex;
     flex-direction: column;
     gap: 10px;

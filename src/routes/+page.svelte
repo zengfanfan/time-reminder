@@ -9,7 +9,6 @@
     deleteReminder,
     toggleReminder,
     createDefaultReminder,
-    getCountdowns,
   } from "$lib/reminders.js";
   import {
     locale,
@@ -30,7 +29,6 @@
   let nameInput;
   let triggerSave = $state(0);
   let countdowns = $state({});
-  let initialized = false;
   let showSettings = $state(false);
 
   onMount(async () => {
@@ -46,7 +44,7 @@
       editing = null;
     });
 
-    // Minimize to tray: blur and resize both fire on minimize; check isMinimized() in each
+    // Minimize to tray
     async function checkMinimized() {
       const minimized = await win.isMinimized();
       if (minimized) {
@@ -59,59 +57,12 @@
     await win.listen("tauri://blur", checkMinimized);
     await win.onResized(checkMinimized);
 
-    // Poll every 200ms until scheduler has data (usually ready within 1s)
-    const initPoll = setInterval(async () => {
-      const data = await getCountdowns();
-      if (data.length > 0) {
-        clearInterval(initPoll);
-        const map = {};
-        for (const item of data) map[item.id] = item.remaining;
-        countdowns = map;
-        initialized = true;
-      }
-    }, 200);
-
-    // Frontend ticks independently
-    setInterval(() => {
-      if (!initialized) return;
-      countdowns = Object.fromEntries(
-        Object.entries(countdowns).map(([id, v]) => [id, Math.max(0, v - 1)]),
-      );
-    }, 1000);
-
-    // Backend broadcast corrects drift every 10s
+    // Rust broadcasts every second — directly drive countdowns from it
     await win.listen("countdown-tick", (event) => {
-      const incoming = {};
-      for (const item of event.payload) incoming[item.id] = item.remaining;
-
-      if (!initialized) {
-        countdowns = incoming;
-        initialized = true;
-        return;
-      }
-
-      const corrected = { ...countdowns };
-      let changed = false;
-      for (const [id, serverVal] of Object.entries(incoming)) {
-        const local = countdowns[id];
-        if (local === undefined || Math.abs(local - serverVal) > 2) {
-          corrected[id] = serverVal;
-          changed = true;
-        }
-      }
-      for (const [id, val] of Object.entries(incoming)) {
-        if (!(id in countdowns)) {
-          corrected[id] = val;
-          changed = true;
-        }
-      }
-      for (const id of Object.keys(countdowns)) {
-        if (!(id in incoming)) {
-          delete corrected[id];
-          changed = true;
-        }
-      }
-      if (changed) countdowns = corrected;
+      console.log("[tick]", Date.now(), JSON.stringify(event.payload));
+      const map = {};
+      for (const item of event.payload) map[item.id] = item.remaining;
+      countdowns = map;
     });
   });
 
@@ -297,10 +248,12 @@
               </div>
               <div class="card-bottom">
                 <div class="card-preview">"{r.text}"</div>
-                {#if r.enabled && countdowns[r.id] !== undefined}
-                  {@const cd = formatCountdownLocale(countdowns[r.id], $t)}
-                  {#if cd !== null}
-                    <span class="card-countdown">{cd}</span>
+                {#if r.enabled}
+                  {@const cd = countdowns[r.id]}
+                  {#if cd !== undefined && cd >= 1 && cd <= 3599}
+                    <span class="card-countdown"
+                      >{formatCountdownLocale(cd, $t)}</span
+                    >
                   {/if}
                 {/if}
               </div>
@@ -534,7 +487,7 @@
   .card-countdown {
     font-size: 12px;
     font-family: var(--mono);
-    color: #2d7a4f;
+    color: #3b5;
     white-space: nowrap;
     flex-shrink: 0;
   }

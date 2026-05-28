@@ -500,6 +500,12 @@
     padding: 28px 20px;
     text-align: center;
     border: 1px solid var(--border);
+    height: 136px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
   }
   .preview-text {
     font-size: 18px;
@@ -522,6 +528,9 @@
     padding: 8px 0;
     display: flex;
     justify-content: flex-end;
+    align-items: flex-end;
+    height: 136px;
+    overflow: hidden;
   }
   .corner-card {
     background: var(--bg-card);

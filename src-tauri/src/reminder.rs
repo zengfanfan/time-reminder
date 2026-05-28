@@ -150,7 +150,6 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
     // Tracks reminders currently being displayed — their timer does NOT count down.
     let mut displaying: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut tick = interval(Duration::from_secs(1));
-    let mut broadcast_counter: u32 = 10;
 
     loop {
         tick.tick().await;
@@ -166,7 +165,6 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
         if let Some(id) = reset_id {
             last_triggered.insert(id.clone(), tokio::time::Instant::now());
             displaying.remove(&id);
-            broadcast_counter = 10;
         }
 
         // ── Handle dismiss signal from overlay ──
@@ -181,7 +179,6 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             // Restart the interval from the moment the user finishes the break.
             last_triggered.insert(id.clone(), tokio::time::Instant::now());
             displaying.remove(&id);
-            broadcast_counter = 10;
         }
 
         let reminders = {
@@ -247,7 +244,8 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
                     } else {
                         match last_triggered.get(&r.id) {
                             Some(last) => {
-                                let elapsed = now.duration_since(*last).as_secs();
+                                let elapsed =
+                                    now.duration_since(*last).as_secs_f64().round() as u64;
                                 r.interval_secs.saturating_sub(elapsed)
                             },
                             None => r.interval_secs,
@@ -264,16 +262,12 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             *lock = Some(snapshot.clone());
         }
 
-        broadcast_counter += 1;
-        if broadcast_counter >= 10 {
-            broadcast_counter = 0;
-            let payload: Vec<serde_json::Value> = snapshot
-                .iter()
-                .map(|(id, remaining)| serde_json::json!({ "id": id, "remaining": remaining }))
-                .collect();
-            if let Some(main) = app.get_webview_window("main") {
-                let _ = main.emit("countdown-tick", payload);
-            }
+        let payload: Vec<serde_json::Value> = snapshot
+            .iter()
+            .map(|(id, remaining)| serde_json::json!({ "id": id, "remaining": remaining }))
+            .collect();
+        if let Some(main) = app.get_webview_window("main") {
+            let _ = main.emit("countdown-tick", payload);
         }
     }
 }
