@@ -149,33 +149,29 @@
     <!-- ── Corner notification ── -->
     <div class="corner-wrapper" class:repositioning>
       <div class="corner-card" role="alertdialog" aria-live="assertive">
-        <div class="corner-header">
-          <span class="corner-dot"></span>
-          <span class="corner-title">{text}</span>
-          <button class="corner-close" onclick={dismiss} title={$t.dismiss}>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-            >
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div class="corner-footer">
-          <div class="corner-progress-bar">
-            {#key totalDuration}
-              <div
-                class="corner-progress-fill"
-                style="animation-duration: {totalDuration}s"
-              ></div>
-            {/key}
-          </div>
-          <span class="corner-timer">{formatCountdown(countdown)}</span>
-        </div>
+        <!-- draining background — sits behind everything -->
+        {#key totalDuration}
+          <div
+            class="corner-progress-bg"
+            style="animation-duration: {totalDuration}s"
+          ></div>
+        {/key}
+
+        <span class="corner-dot"></span>
+        <span class="corner-title">{text}</span>
+        <span class="corner-timer">{formatCountdown(countdown)}</span>
+        <button class="corner-close" onclick={dismiss} title={$t.dismiss}>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
       </div>
     </div>
   {/if}
@@ -345,26 +341,45 @@
   }
 
   .corner-card {
+    /* single row, vertically centered */
+    position: relative;
     flex: 1;
     background: #1a1d2e;
-    border-radius: 14px;
-    padding: 14px 16px 12px;
+    overflow: hidden;
+    border-radius: 22px;
+    padding: 0 10px 0 12px;
+    border: 1px solid #0000;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
   }
-  .corner-header {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
+
+  /* progress background: full-width accent color that drains left→right */
+  .corner-progress-bg {
+    position: absolute;
+    inset: 0;
+    background: rgba(78, 159, 255, 0.3);
+    transform-origin: left;
+    animation: progressDrain linear forwards;
+    pointer-events: none;
+    border-radius: 0;
   }
+  @keyframes progressDrain {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
   .corner-dot {
+    position: relative; /* above progress bg */
     flex-shrink: 0;
-    margin-top: 3px;
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #4e7bff;
+    background: #6d6;
     box-shadow: 0 0 6px rgba(78, 123, 255, 0.8);
     animation: dotPulse 2s ease-in-out infinite;
   }
@@ -379,20 +394,37 @@
       box-shadow: 0 0 10px rgba(78, 123, 255, 0.4);
     }
   }
+
   .corner-title {
+    position: relative;
     flex: 1;
     font-size: 14px;
     font-weight: 500;
     color: #e8eaf0;
-    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
+
+  .corner-timer {
+    position: relative;
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: #6bf;
+    min-width: 28px;
+    text-align: right;
+  }
+
   .corner-close {
+    position: relative;
     flex-shrink: 0;
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    padding: 2px;
+    padding: 4px;
     border-radius: 4px;
     display: flex;
     align-items: center;
@@ -401,44 +433,6 @@
   }
   .corner-close:hover {
     color: #ff4e6a;
-    background: rgba(255, 78, 106, 0.1);
-  }
-
-  .corner-footer {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .corner-progress-bar {
-    flex: 1;
-    height: 3px;
-    background: rgba(78, 123, 255, 0.15);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .corner-progress-fill {
-    height: 100%;
-    width: 100%;
-    background: linear-gradient(90deg, #4e7bff, #7b9fff);
-    border-radius: 2px;
-    transform-origin: left;
-    animation: progressDrain linear forwards;
-  }
-  @keyframes progressDrain {
-    from {
-      transform: scaleX(1);
-    }
-    to {
-      transform: scaleX(0);
-    }
-  }
-  .corner-timer {
-    flex-shrink: 0;
-    font-family: var(--sans);
-    font-size: 13px;
-    font-weight: 600;
-    color: #4e7bff;
-    min-width: 36px;
-    text-align: right;
+    background: rgba(255, 78, 106, 0.15);
   }
 </style>

@@ -105,9 +105,9 @@ impl ReminderManager {
 
 /// Corner notification dimensions (logical pixels)
 pub const CORNER_W: u32 = 340;
-pub const CORNER_H: u32 = 55;
-pub const CORNER_GAP: u32 = 8;
-pub const CORNER_MARGIN: u32 = 24;
+pub const CORNER_H: u32 = 44;
+pub const CORNER_GAP: u32 = 4;
+pub const CORNER_MARGIN: u32 = 12;
 
 /// Ordered list of active corner overlay window labels (bottom = index 0).
 /// Each entry is (window_label, reminder_id).
