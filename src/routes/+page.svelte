@@ -443,6 +443,7 @@
 
   .card-body {
     flex: 1;
+    min-width: 0;
     padding: 14px 16px;
     text-align: left;
     background: none;
@@ -458,22 +459,34 @@
     display: flex;
     align-items: baseline;
     gap: 10px;
+    overflow: hidden;
   }
   .card-name {
     font-weight: 600;
     font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 0;
   }
   .card-meta {
     font-size: 12px;
     color: var(--text-muted);
     font-family: var(--mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 2;
+    min-width: 0;
   }
 
   .card-bottom {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: center;
-    gap: 10px;
-    overflow: hidden;
+    gap: 8px;
+    min-width: 0;
   }
   .card-preview {
     font-size: 13px;
@@ -481,7 +494,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    flex: 1;
     min-width: 0;
   }
   .card-countdown {
