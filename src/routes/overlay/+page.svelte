@@ -1,94 +1,105 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { t, initLocale } from "$lib/i18n.js";
 
-  let visible = $state(false);
+  // Data filled after backend fetch
+  let reminderId = $state("");
+  let windowLabel = $state("");
   let text = $state("");
   let countdown = $state(0);
-  let totalDuration = $state(0); // fixed initial duration for progress bar
+  let totalDuration = $state(0);
   let fullscreen = $state(false);
-  let currentId = $state("");
+  let soundVolume = $state(60);
+  let visible = $state(false);
+
   let timer = null;
   let win = null;
 
-  // Fetched once on mount, refreshed whenever a reminder fires
-  let soundVolume = $state(60);
+  // Corner slide-down animation when repositioned
+  let repositioning = $state(false);
 
   onMount(async () => {
     initLocale();
     win = getCurrentWebviewWindow();
+    windowLabel = win.label;
 
-    // Load initial volume
-    try {
-      const cfg = await invoke("get_app_config");
-      soundVolume = cfg.sound_volume ?? 60;
-    } catch (_) {}
+    // Fetch our own payload from the backend
+    const data = await invoke("get_overlay_data", { label: windowLabel });
+    if (!data) {
+      // Shouldn't happen, close self
+      win.close();
+      return;
+    }
 
-    await win.listen("show-reminder", async (event) => {
-      // Re-fetch volume each time so it reflects latest setting
-      try {
-        const cfg = await invoke("get_app_config");
-        soundVolume = cfg.sound_volume ?? 60;
-      } catch (_) {}
+    reminderId = data.id ?? "";
+    text = data.text ?? "";
+    countdown = data.duration ?? 20;
+    totalDuration = countdown;
+    fullscreen = data.fullscreen ?? false;
+    soundVolume = data.volume ?? 60;
+    visible = true;
 
-      const data = event.payload;
-      currentId = data.id ?? "";
-      text = data.text || "";
-      countdown = data.duration || 20;
-      totalDuration = countdown;
-      fullscreen = data.fullscreen ?? false;
-      visible = true;
+    // For fullscreen: wait for Svelte to flush DOM updates so the WebView
+    // has actually painted before we reveal the window — kills the white flash.
+    // Corner windows are small/transparent so they don't need this treatment.
+    if (fullscreen) {
+      await tick();
+      await invoke("show_overlay", { label: windowLabel, fullscreen: true });
+    }
 
-      if (data.playSound) playBeep();
+    if (data.playSound) playBeep();
 
-      if (timer) clearInterval(timer);
-      timer = setInterval(() => {
-        countdown--;
-        if (countdown <= 0) {
-          dismiss();
-        }
-      }, 1000);
-    });
+    // Start countdown
+    timer = setInterval(() => {
+      countdown--;
+      if (countdown <= 0) dismiss();
+    }, 1000);
+
+    // Listen for re-layout repositioning (corner stack only)
+    if (!fullscreen) {
+      await win.listen("reposition", () => {
+        // Trigger a brief CSS transition on the card
+        repositioning = true;
+        setTimeout(() => (repositioning = false), 350);
+      });
+    }
   });
 
   function dismiss() {
-    if (timer) clearInterval(timer);
-    timer = null;
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
     visible = false;
-    // Tell the backend the break is over — interval restarts from now.
-    if (currentId)
-      invoke("dismiss_reminder", { id: currentId }).catch(() => {});
-    if (win) win.hide();
+    invoke("dismiss_overlay", {
+      label: windowLabel,
+      reminderId,
+      fullscreen,
+    }).catch(() => {});
   }
 
   function playBeep() {
     try {
       const vol = (soundVolume ?? 60) / 100;
       const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 660;
-      osc.type = "sine";
-      gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.5);
-      setTimeout(() => {
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.frequency.value = 880;
-        osc2.type = "sine";
-        gain2.gain.setValueAtTime(vol * 0.5, ctx.currentTime);
-        gain2.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
-        osc2.start(ctx.currentTime);
-        osc2.stop(ctx.currentTime + 0.5);
-      }, 300);
+      const makeBeep = (freq, delay) => {
+        setTimeout(() => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          osc.type = "sine";
+          gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.5);
+        }, delay);
+      };
+      makeBeep(660, 0);
+      makeBeep(880, 300);
     } catch (e) {
       console.warn("Audio playback failed:", e);
     }
@@ -136,7 +147,7 @@
     </div>
   {:else}
     <!-- ── Corner notification ── -->
-    <div class="corner-wrapper">
+    <div class="corner-wrapper" class:repositioning>
       <div class="corner-card" role="alertdialog" aria-live="assertive">
         <div class="corner-header">
           <span class="corner-dot"></span>
@@ -171,7 +182,6 @@
 {/if}
 
 <style>
-  /* Make the window itself fully transparent — app.css sets body background which we must override */
   :global(html),
   :global(body) {
     background: transparent !important;
@@ -313,24 +323,29 @@
   /* ════ Corner notification ════ */
   .corner-wrapper {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
-    z-index: 99999;
+    /* Rust positions the window itself, so the card fills the whole window */
+    inset: 0;
+    display: flex;
+    align-items: stretch;
     animation: cornerSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* When Rust repositions the window, add a smooth CSS transition */
+  .corner-wrapper.repositioning {
+    transition: top 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
   @keyframes cornerSlideIn {
     from {
       opacity: 0;
-      transform: translateX(24px) translateY(8px) scale(0.95);
+      transform: translateX(24px) scale(0.95);
     }
     to {
       opacity: 1;
-      transform: translateX(0) translateY(0) scale(1);
+      transform: translateX(0) scale(1);
     }
   }
 
   .corner-card {
-    width: 300px;
+    flex: 1;
     background: #1a1d2e;
     border-radius: 14px;
     padding: 14px 16px 12px;
@@ -388,6 +403,7 @@
     color: #ff4e6a;
     background: rgba(255, 78, 106, 0.1);
   }
+
   .corner-footer {
     display: flex;
     align-items: center;

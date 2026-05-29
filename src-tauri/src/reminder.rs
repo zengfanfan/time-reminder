@@ -101,45 +101,165 @@ impl ReminderManager {
     }
 }
 
+// ── Corner window layout ──────────────────────────────────────────────────────
+
 /// Corner notification dimensions (logical pixels)
-const CORNER_W: u32 = 340;
-const CORNER_H: u32 = 110;
-const CORNER_MARGIN: u32 = 24;
+pub const CORNER_W: u32 = 340;
+pub const CORNER_H: u32 = 55;
+pub const CORNER_GAP: u32 = 8;
+pub const CORNER_MARGIN: u32 = 24;
 
-fn setup_overlay_window(overlay: &tauri::WebviewWindow, fullscreen: bool) {
-    if fullscreen {
-        // Restore to fullscreen
-        let _ = overlay.set_fullscreen(true);
+/// Ordered list of active corner overlay window labels (bottom = index 0).
+/// Each entry is (window_label, reminder_id).
+pub static CORNER_STACK: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+
+/// Pending overlay payloads waiting for the window to finish loading.
+/// Key = window label.
+pub static OVERLAY_PENDING: std::sync::LazyLock<
+    Mutex<std::collections::HashMap<String, serde_json::Value>>,
+> = std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+
+/// Recompute Y positions and push "reposition" events to all corner windows.
+fn relayout_corners(app: &tauri::AppHandle) {
+    let stack = match CORNER_STACK.lock() {
+        Ok(s) => s.clone(),
+        Err(_) => return,
+    };
+
+    // Get work area (excludes taskbar) in physical pixels from the primary monitor.
+    // Monitor::work_area() is Tauri 2's official API for this — no FFI needed.
+    let monitor = if let Some(win) = app.get_webview_window("main") {
+        win.primary_monitor().ok().flatten()
+    } else if let Some((label, _)) = stack.first() {
+        app.get_webview_window(label).and_then(|w| w.primary_monitor().ok().flatten())
     } else {
-        // Exit fullscreen first, then resize + reposition to bottom-right corner
-        let _ = overlay.set_fullscreen(false);
+        None
+    };
 
-        // Get the monitor the cursor/primary monitor occupies
-        if let Ok(Some(monitor)) = overlay.primary_monitor() {
-            let screen_size = monitor.size();
-            let scale = monitor.scale_factor();
+    let monitor = match monitor {
+        Some(m) => m,
+        None => return,
+    };
 
-            // Convert logical corner dimensions to physical pixels
-            let phys_w = (CORNER_W as f64 * scale) as u32;
-            let phys_h = (CORNER_H as f64 * scale) as u32;
-            let margin_phys = (CORNER_MARGIN as f64 * scale) as u32;
+    let scale = monitor.scale_factor();
+    let wa = monitor.work_area();
+    // work_area() returns &PhysicalRect with .position (PhysicalPosition) and .size (PhysicalSize)
+    let wa_right = wa.position.x as i32 + wa.size.width as i32;
+    let wa_bottom = wa.position.y as i32 + wa.size.height as i32;
 
-            let x = (screen_size.width.saturating_sub(phys_w + margin_phys)) as i32;
-            let y = (screen_size.height.saturating_sub(phys_h + margin_phys)) as i32;
+    // Card dimensions in physical pixels
+    let card_w = (CORNER_W as f64 * scale) as i32;
+    let card_h = (CORNER_H as f64 * scale) as i32;
+    let gap = (CORNER_GAP as f64 * scale) as i32;
+    let margin = (CORNER_MARGIN as f64 * scale) as i32;
 
-            let _ = overlay.set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                width: phys_w,
-                height: phys_h,
-            }));
-            let _ =
-                overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
-        } else {
-            // Fallback: fixed logical size
-            let _ = overlay.set_size(tauri::Size::Logical(tauri::LogicalSize {
-                width: CORNER_W as f64,
-                height: CORNER_H as f64,
-            }));
+    let x = wa_right - card_w - margin;
+
+    // index 0 = bottom-most (oldest), higher index = newer (further up)
+    for (i, (label, _rid)) in stack.iter().enumerate() {
+        let y = wa_bottom - margin - (i as i32 + 1) * card_h - i as i32 * gap;
+
+        if let Some(win) = app.get_webview_window(label) {
+            let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+            let _ = win.emit("reposition", serde_json::json!({ "slot": i }));
         }
+    }
+}
+
+/// Create a new overlay window for one reminder firing.
+pub fn spawn_overlay(app: &tauri::AppHandle, reminder: &ReminderConfig, sound_volume: u8) {
+    let label = format!("overlay-{}", reminder.id);
+
+    // If a window for this reminder is already showing, don't spawn a second one.
+    if app.get_webview_window(&label).is_some() {
+        return;
+    }
+
+    let payload = serde_json::json!({
+        "id":         reminder.id,
+        "label":      label.clone(),
+        "text":       reminder.text,
+        "duration":   reminder.display_secs,
+        "playSound":  reminder.play_sound,
+        "fullscreen": reminder.fullscreen,
+        "volume":     sound_volume,
+    });
+
+    // Stash payload so the page can fetch it once ready
+    if let Ok(mut map) = OVERLAY_PENDING.lock() {
+        map.insert(label.clone(), payload.clone());
+    }
+
+    // Register in corner stack before creating the window so relayout sees it
+    if !reminder.fullscreen {
+        if let Ok(mut stack) = CORNER_STACK.lock() {
+            stack.push((label.clone(), reminder.id.clone()));
+        }
+    }
+
+    // Build the window
+    let win_result =
+        tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App("/overlay".into()))
+            .title("")
+            .visible(false)
+            .always_on_top(true)
+            .decorations(false)
+            .transparent(true)
+            .skip_taskbar(true)
+            .shadow(false)
+            .build();
+
+    match win_result {
+        Ok(win) => {
+            if reminder.fullscreen {
+                // Don't show yet — frontend will call show_overlay once the DOM
+                // is fully painted, avoiding the white-flash on WebView init.
+                let _ = win.set_fullscreen(true);
+            } else {
+                // Size in physical pixels — consistent with PhysicalPosition in relayout_corners
+                if let Ok(Some(monitor)) = win.primary_monitor() {
+                    let scale = monitor.scale_factor();
+                    let _ = win.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                        width: (CORNER_W as f64 * scale) as u32,
+                        height: (CORNER_H as f64 * scale) as u32,
+                    }));
+                } else {
+                    let _ = win.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                        width: CORNER_W as f64,
+                        height: CORNER_H as f64,
+                    }));
+                }
+                let app2 = app.clone();
+                relayout_corners(&app2);
+                let _ = win.show();
+            }
+        },
+        Err(e) => {
+            eprintln!("[overlay] Failed to create window {label}: {e}");
+            // Clean up pending and stack on failure
+            if let Ok(mut map) = OVERLAY_PENDING.lock() {
+                map.remove(&label);
+            }
+            if !reminder.fullscreen {
+                if let Ok(mut stack) = CORNER_STACK.lock() {
+                    stack.retain(|(l, _)| l != &label);
+                }
+            }
+        },
+    }
+}
+
+/// Called when an overlay window is dismissed (by user or timer).
+/// Cleans up state and re-layouts remaining corner windows.
+pub fn on_overlay_closed(app: &tauri::AppHandle, label: &str, fullscreen: bool) {
+    if let Ok(mut map) = OVERLAY_PENDING.lock() {
+        map.remove(label);
+    }
+    if !fullscreen {
+        if let Ok(mut stack) = CORNER_STACK.lock() {
+            stack.retain(|(l, _)| l != label);
+        }
+        relayout_corners(app);
     }
 }
 
@@ -176,7 +296,6 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             }
         };
         if let Some(id) = dismissed_id {
-            // Restart the interval from the moment the user finishes the break.
             last_triggered.insert(id.clone(), tokio::time::Instant::now());
             displaying.remove(&id);
         }
@@ -185,6 +304,12 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             let state = app.state::<crate::AppState>();
             let manager = state.reminder_manager.lock().unwrap();
             manager.get_all()
+        };
+
+        let sound_volume = {
+            let state = app.state::<crate::AppState>();
+            let v = state.app_config.lock().unwrap().sound_volume;
+            v
         };
 
         let now = tokio::time::Instant::now();
@@ -196,7 +321,6 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
         displaying.retain(|id| active_ids.contains(id));
 
         for reminder in reminders.iter().filter(|r| r.enabled) {
-            // While overlay is showing, freeze the countdown for this reminder.
             if displaying.contains(&reminder.id) {
                 continue;
             }
@@ -211,26 +335,7 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
 
             if should_trigger {
                 displaying.insert(reminder.id.clone());
-
-                if let Some(overlay) = app.get_webview_window("overlay") {
-                    // Adjust window geometry BEFORE showing
-                    setup_overlay_window(&overlay, reminder.fullscreen);
-
-                    let _ = overlay.emit(
-                        "show-reminder",
-                        serde_json::json!({
-                            "id": reminder.id,
-                            "text": reminder.text,
-                            "duration": reminder.display_secs,
-                            "playSound": reminder.play_sound,
-                            "fullscreen": reminder.fullscreen,
-                        }),
-                    );
-                    let _ = overlay.show();
-                    if reminder.fullscreen {
-                        let _ = overlay.set_focus();
-                    }
-                }
+                spawn_overlay(&app, reminder, sound_volume);
             }
         }
 

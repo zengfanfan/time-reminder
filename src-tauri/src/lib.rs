@@ -92,6 +92,39 @@ fn get_countdowns() -> Vec<serde_json::Value> {
     vec![]
 }
 
+/// Called by an overlay page on startup to fetch its own reminder payload.
+#[tauri::command]
+fn get_overlay_data(label: String) -> Option<serde_json::Value> {
+    if let Ok(map) = reminder::OVERLAY_PENDING.lock() {
+        map.get(&label).cloned()
+    } else {
+        None
+    }
+}
+
+/// Called by the overlay page once it has fully painted — avoids white-flash.
+#[tauri::command]
+fn show_overlay(app: AppHandle, label: String, fullscreen: bool) {
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.show();
+        if fullscreen {
+            let _ = win.set_focus();
+        }
+    }
+}
+
+/// Called by an overlay page when it finishes dismissing itself.
+#[tauri::command]
+fn dismiss_overlay(app: AppHandle, label: String, reminder_id: String, fullscreen: bool) {
+    if let Ok(mut lock) = reminder::DISMISSED_ID.lock() {
+        *lock = Some(reminder_id);
+    }
+    reminder::on_overlay_closed(&app, &label, fullscreen);
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.close();
+    }
+}
+
 #[tauri::command]
 fn save_reminder(
     state: tauri::State<'_, AppState>,
@@ -146,7 +179,6 @@ fn set_autostart(
     } else {
         mgr.disable().map_err(|e| e.to_string())?;
     }
-    // Read back actual system state to confirm
     let actual = mgr.is_enabled().unwrap_or(enabled);
     let mut cfg = state.app_config.lock().unwrap();
     cfg.autostart = actual;
@@ -219,14 +251,6 @@ fn hide_main_window(app: AppHandle) {
 #[tauri::command]
 fn quit_app(app: AppHandle) {
     app.exit(0);
-}
-
-#[tauri::command]
-fn dismiss_reminder(id: String) {
-    // Signal the scheduler to restart this reminder's interval from now.
-    if let Ok(mut lock) = reminder::DISMISSED_ID.lock() {
-        *lock = Some(id);
-    }
 }
 
 // ── Tray helpers ──────────────────────────────────────────────────────────────
@@ -310,7 +334,6 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // Focus the existing window when a second instance is launched
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.unminimize();
                 let _ = win.show();
@@ -324,6 +347,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_reminders,
             get_countdowns,
+            get_overlay_data,
+            show_overlay,
+            dismiss_overlay,
             save_reminder,
             delete_reminder,
             toggle_reminder,
@@ -336,10 +362,8 @@ pub fn run() {
             show_main_window,
             hide_main_window,
             quit_app,
-            dismiss_reminder,
         ])
         .setup(|app| {
-            // Sync autostart state from system (may differ from saved config)
             {
                 let state = app.state::<AppState>();
                 let mut cfg = state.app_config.lock().unwrap();
@@ -352,7 +376,6 @@ pub fn run() {
 
             let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
 
-            // Build tray with menu
             let menu = build_tray_menu(app.handle(), &cfg)?;
             let tray = TrayIconBuilder::with_id("main")
                 .tooltip("TimeVeil")
@@ -384,34 +407,29 @@ pub fn run() {
                             }
                         },
                         "autostart" => {
-                            let new_val = !cfg.autostart;
-                            let _ = set_autostart_inner(app, new_val);
+                            let _ = set_autostart_inner(app, !cfg.autostart);
                         },
                         "quit_on_close" => {
-                            let new_val = !cfg.quit_on_close;
                             {
                                 let state = app.state::<AppState>();
                                 let mut c = state.app_config.lock().unwrap();
-                                c.quit_on_close = new_val;
+                                c.quit_on_close = !cfg.quit_on_close;
                                 c.save();
                             }
-                            let state = app.state::<AppState>();
-                            let cfg2 = state.app_config.lock().unwrap().clone();
+                            let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
                             sync_tray_menu(app, &cfg2);
                             if let Some(win) = app.get_webview_window("main") {
                                 let _ = win.emit("config-changed", ());
                             }
                         },
                         "min_tray" => {
-                            let new_val = !cfg.minimize_to_tray;
                             {
                                 let state = app.state::<AppState>();
                                 let mut c = state.app_config.lock().unwrap();
-                                c.minimize_to_tray = new_val;
+                                c.minimize_to_tray = !cfg.minimize_to_tray;
                                 c.save();
                             }
-                            let state = app.state::<AppState>();
-                            let cfg2 = state.app_config.lock().unwrap().clone();
+                            let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
                             sync_tray_menu(app, &cfg2);
                             if let Some(win) = app.get_webview_window("main") {
                                 let _ = win.emit("config-changed", ());
@@ -431,8 +449,7 @@ pub fn run() {
                         let app = tray.app_handle();
                         let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
                         if let Some(win) = app.get_webview_window("main") {
-                            let visible = win.is_visible().unwrap_or(false);
-                            if visible {
+                            if win.is_visible().unwrap_or(false) {
                                 let _ = win.hide();
                             } else {
                                 let _ = win.unminimize();
@@ -446,21 +463,21 @@ pub fn run() {
                 .build(app)?;
             drop(tray);
 
-            // Start scheduler
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+                let rt = tokio::runtime::Runtime::new().expect("tokio");
                 rt.block_on(reminder::start_scheduler(app_handle));
             });
 
             Ok(())
         })
         .on_window_event(|window, event| {
-            if window.label() == "main" {
-                let app = window.app_handle();
+            let label = window.label().to_string();
+            let app = window.app_handle();
+
+            if label == "main" {
                 let state = app.state::<AppState>();
                 let cfg = state.app_config.lock().unwrap().clone();
-
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     if cfg.quit_on_close {
                         app.exit(0);
@@ -471,17 +488,23 @@ pub fn run() {
                     }
                 }
             }
+
+            // Clean up if an overlay window is destroyed unexpectedly
+            if label.starts_with("overlay-") {
+                if let WindowEvent::Destroyed = event {
+                    reminder::on_overlay_closed(app, &label, false);
+                    reminder::on_overlay_closed(app, &label, true);
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-// helper to avoid borrow issues in closure
-fn set_autostart_inner(app: &AppHandle, enabled: bool) {
+fn set_autostart_inner(app: &AppHandle, enabled: bool) -> Result<(), String> {
     let mgr = app.autolaunch();
     let ok = if enabled { mgr.enable() } else { mgr.disable() };
     if ok.is_ok() {
-        // Read back the actual system state to confirm
         let actual = mgr.is_enabled().unwrap_or(enabled);
         {
             let state = app.state::<AppState>();
@@ -489,11 +512,11 @@ fn set_autostart_inner(app: &AppHandle, enabled: bool) {
             cfg.autostart = actual;
             cfg.save();
         }
-        let state = app.state::<AppState>();
-        let cfg2 = state.app_config.lock().unwrap().clone();
+        let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
         sync_tray_menu(app, &cfg2);
         if let Some(win) = app.get_webview_window("main") {
             let _ = win.emit("config-changed", ());
         }
     }
+    Ok(())
 }

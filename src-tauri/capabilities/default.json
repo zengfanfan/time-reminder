@@ -4,7 +4,7 @@
   "description": "Capability for the main and overlay windows",
   "windows": [
     "main",
-    "overlay"
+    "overlay-*"
   ],
   "permissions": [
     "core:default",
@@ -12,6 +12,7 @@
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
+    "core:window:allow-create",
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-focus",
