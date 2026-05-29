@@ -310,7 +310,7 @@
     padding: 10px 12px;
     color: var(--text-primary);
     font-size: 14px;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     outline: none;
     transition: border-color 0.15s;
     resize: none;
@@ -371,7 +371,7 @@
     padding: 6px 4px 6px 8px;
     color: var(--text-primary);
     font-size: 13px;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     outline: none;
     cursor: pointer;
     transition: border-color 0.15s;
@@ -429,7 +429,7 @@
     padding: 6px 12px;
     color: var(--text-secondary);
     font-size: 13px;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     cursor: pointer;
     transition: all 0.15s;
     white-space: nowrap;
@@ -572,7 +572,7 @@
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     transition: all 0.15s;
   }
   .btn-save:hover {
@@ -588,7 +588,7 @@
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     transition: all 0.15s;
   }
   .btn-delete:hover {
@@ -672,7 +672,7 @@
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     transition: all 0.15s;
   }
   .dialog-cancel:hover {
@@ -690,7 +690,7 @@
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     transition: all 0.15s;
   }
   .dialog-confirm:hover {

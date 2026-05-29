@@ -201,7 +201,7 @@
     padding: 10px 18px 10px 14px;
     color: rgba(255, 255, 255, 0.5);
     font-size: 14px;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     cursor: pointer;
     transition: all 0.2s;
     backdrop-filter: blur(8px);
@@ -273,7 +273,7 @@
   }
 
   .timer {
-    font-family: "JetBrains Mono", monospace;
+    font-family: var(--sans);
     font-size: 52px;
     font-weight: 700;
     color: #fff;
@@ -402,7 +402,7 @@
   }
   .corner-timer {
     flex-shrink: 0;
-    font-family: "JetBrains Mono", monospace;
+    font-family: var(--sans);
     font-size: 13px;
     font-weight: 600;
     color: #4e7bff;

@@ -1,3 +1,16 @@
+@font-face {
+  font-family: "AppFont";
+  src: url("/font.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+@font-face {
+  font-family: "AppFont-Mono";
+  src: url("/font-mono.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+
 *,
 *::before,
 *::after {
@@ -24,11 +37,19 @@
   --text-secondary: #99b;
   --text-muted: #779;
   --radius: 10px;
-  --mono: "JetBrains Mono", monospace;
+  --sans: "AppFont", "Microsoft YaHei", "微软雅黑", "PingFang SC", "Noto Sans SC", sans-serif;
+  --mono: "AppFont-Mono, Cascadia Code", "JetBrains Mono", "Consolas", "Monaco", monospace;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--sans);
 }
 
 body {
-  font-family: "Noto Sans SC", sans-serif;
+  font-family: var(--sans);
   background: var(--bg-main);
   color: var(--text-primary);
   overflow: hidden;

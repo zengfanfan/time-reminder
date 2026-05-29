@@ -25,7 +25,6 @@
   let editing = $state(null);
   let editingName = $state("");
   let isNew = $state(false);
-  let loading = $state(true);
   let nameInput;
   let triggerSave = $state(0);
   let countdowns = $state({});
@@ -33,10 +32,13 @@
 
   onMount(async () => {
     initLocale();
-    reminders = await loadReminders();
-    loading = false;
+    loadReminders().then((data) => {
+      reminders = data;
+    });
 
     const win = getCurrentWebviewWindow();
+    // Show window after content is ready to avoid WebView2 white flash
+    win.show();
 
     // Tray menu can open settings
     await win.listen("open-settings", () => {
@@ -224,8 +226,6 @@
       />
     {:else if showSettings}
       <SettingsPanel onClose={() => (showSettings = false)} />
-    {:else if loading}
-      <div class="empty"><p class="muted">{$t.loading}</p></div>
     {:else if reminders.length === 0}
       <div class="empty">
         <div class="empty-icon">⏰</div>
@@ -338,7 +338,7 @@
     color: var(--text-primary);
     font-size: 15px;
     font-weight: 600;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     outline: none;
     -webkit-app-region: no-drag;
     transition: border-color 0.15s;
@@ -381,7 +381,7 @@
     color: var(--text-secondary);
     font-size: 12px;
     font-weight: 600;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
     cursor: pointer;
     letter-spacing: 0.04em;
     transition: all 0.15s;
@@ -545,7 +545,7 @@
     justify-content: center;
     gap: 8px;
     transition: all 0.15s;
-    font-family: "Noto Sans SC", sans-serif;
+    font-family: var(--sans);
   }
   .btn-add:hover {
     filter: brightness(1.15);
