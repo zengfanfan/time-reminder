@@ -202,6 +202,7 @@ pub fn spawn_overlay(app: &tauri::AppHandle, reminder: &ReminderConfig, sound_vo
         tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App("/overlay".into()))
             .title("")
             .visible(false)
+            .resizable(false)
             .always_on_top(true)
             .decorations(false)
             .transparent(true)
