@@ -1,5 +1,6 @@
 <script>
   import { tick } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import { t } from "$lib/i18n.js";
 
   let { config, isNew, onSave, onDelete, name, onNameChange, triggerSave } =
@@ -102,8 +103,15 @@
     }
   }
 
-  function playBeep() {
+  async function playBeep() {
     try {
+      // Read current volume from backend so preview matches the real sound
+      let vol = 0.6;
+      try {
+        const cfg = await invoke("get_app_config");
+        vol = (cfg.sound_volume ?? 60) / 100;
+      } catch (_) {}
+
       const ctx = new AudioContext();
       const beep = (freq, delay) => {
         setTimeout(() => {
@@ -113,8 +121,8 @@
           gain.connect(ctx.destination);
           osc.frequency.value = freq;
           osc.type = "sine";
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
           osc.start(ctx.currentTime);
           osc.stop(ctx.currentTime + 0.5);
         }, delay);

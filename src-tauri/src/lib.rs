@@ -18,6 +18,12 @@ pub struct AppConfig {
     pub quit_on_close: bool,
     pub minimize_to_tray: bool,
     pub locale: String,
+    #[serde(default = "default_sound_volume")]
+    pub sound_volume: u8,
+}
+
+fn default_sound_volume() -> u8 {
+    60
 }
 
 impl Default for AppConfig {
@@ -27,6 +33,7 @@ impl Default for AppConfig {
             quit_on_close: false,
             minimize_to_tray: false,
             locale: "en".to_string(),
+            sound_volume: 60,
         }
     }
 }
@@ -175,6 +182,14 @@ fn set_minimize_to_tray(
 }
 
 #[tauri::command]
+fn set_sound_volume(state: tauri::State<'_, AppState>, volume: u8) -> Result<(), String> {
+    let mut cfg = state.app_config.lock().unwrap();
+    cfg.sound_volume = volume.clamp(1, 100);
+    cfg.save();
+    Ok(())
+}
+
+#[tauri::command]
 fn set_locale(app: AppHandle, state: tauri::State<'_, AppState>, locale: String) {
     let mut cfg = state.app_config.lock().unwrap();
     cfg.locale = locale;
@@ -316,6 +331,7 @@ pub fn run() {
             set_autostart,
             set_quit_on_close,
             set_minimize_to_tray,
+            set_sound_volume,
             set_locale,
             show_main_window,
             hide_main_window,

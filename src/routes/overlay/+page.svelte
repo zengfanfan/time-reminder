@@ -13,11 +13,26 @@
   let timer = null;
   let win = null;
 
+  // Fetched once on mount, refreshed whenever a reminder fires
+  let soundVolume = $state(60);
+
   onMount(async () => {
     initLocale();
     win = getCurrentWebviewWindow();
 
-    await win.listen("show-reminder", (event) => {
+    // Load initial volume
+    try {
+      const cfg = await invoke("get_app_config");
+      soundVolume = cfg.sound_volume ?? 60;
+    } catch (_) {}
+
+    await win.listen("show-reminder", async (event) => {
+      // Re-fetch volume each time so it reflects latest setting
+      try {
+        const cfg = await invoke("get_app_config");
+        soundVolume = cfg.sound_volume ?? 60;
+      } catch (_) {}
+
       const data = event.payload;
       currentId = data.id ?? "";
       text = data.text || "";
@@ -50,6 +65,7 @@
 
   function playBeep() {
     try {
+      const vol = (soundVolume ?? 60) / 100;
       const ctx = new AudioContext();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -57,8 +73,8 @@
       gain.connect(ctx.destination);
       osc.frequency.value = 660;
       osc.type = "sine";
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      gain.gain.setValueAtTime(vol * 0.5, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.5);
       setTimeout(() => {
@@ -68,8 +84,8 @@
         gain2.connect(ctx.destination);
         osc2.frequency.value = 880;
         osc2.type = "sine";
-        gain2.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        gain2.gain.setValueAtTime(vol * 0.5, ctx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
         osc2.start(ctx.currentTime);
         osc2.stop(ctx.currentTime + 0.5);
       }, 300);
