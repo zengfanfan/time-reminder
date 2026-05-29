@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "clean:hard": "rm -rf node_modules bun.lockb src-tauri/target dist build .svelte-kit src-tauri/gen"
   },
   "license": "MIT",
   "dependencies": {
