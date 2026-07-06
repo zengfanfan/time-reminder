@@ -21,6 +21,9 @@
   import type { AppConfig, CountdownItem, CountdownMap, ReminderConfig } from "$lib/types";
   import ReminderEditor from "$lib/ReminderEditor.svelte";
   import SettingsPanel from "$lib/SettingsPanel.svelte";
+  import packageJson from "../../package.json";
+
+  const appVersion = packageJson.version;
 
   let reminders = $state<ReminderConfig[]>([]);
   let editing = $state<ReminderConfig | null>(null);
@@ -255,7 +258,10 @@
           <circle cx="12" cy="12" r="10" />
           <path d="M12 6v6l4 2" />
         </svg>
-        <h1>{$t.appName}</h1>
+        <h1>
+          {$t.appName}
+          <span class="app-version">v{appVersion}</span>
+        </h1>
       </div>
       <div class="topbar-spacer"></div>
       <button class="btn-lang" onclick={toggleLocale} title={$t.switchLanguage}>
@@ -440,6 +446,13 @@
     font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.02em;
+  }
+
+  .app-version {
+    margin-left: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
   }
 
   .topbar-spacer {
