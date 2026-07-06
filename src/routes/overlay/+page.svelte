@@ -31,6 +31,26 @@
   // Corner slide-down animation when repositioned
   let repositioning = $state(false);
 
+  onMount(() => {
+    const contextMenuOptions = { capture: true };
+    /** @param {MouseEvent} e */
+    const handleContextMenu = (e) => {
+      if (import.meta.env.DEV) return;
+      if (isNativeEditableContext(e.target)) return;
+
+      e.preventDefault();
+    };
+    window.addEventListener("contextmenu", handleContextMenu, contextMenuOptions);
+
+    return () => {
+      window.removeEventListener(
+        "contextmenu",
+        handleContextMenu,
+        contextMenuOptions,
+      );
+    };
+  });
+
   onMount(async () => {
     initLocale();
     win = getCurrentWebviewWindow();
@@ -137,6 +157,15 @@
       e.preventDefault();
       cancelExitChallenge();
     }
+  }
+
+  /** @param {EventTarget | null} target */
+  function isNativeEditableContext(target) {
+    if (!(target instanceof Element)) return false;
+    const field = target.closest(
+      "input, textarea, [contenteditable=''], [contenteditable='true']",
+    );
+    return Boolean(field && !field.matches(":disabled, [readonly]"));
   }
 
   function playBeep() {
