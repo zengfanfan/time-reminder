@@ -10,18 +10,18 @@ This is a SvelteKit + Tauri desktop app. Frontend code lives in `src/`: shared c
 - `bun run build`: build the frontend for production.
 - `bun run preview`: preview the built frontend.
 - `bun run check`: run `svelte-check` with `jsconfig.json`.
-- `bun test`: run all Node tests plus Rust Cargo tests via the package script.
+- `bun run test`: run all Node tests plus Rust Cargo tests via the package script.
 - `bun run test:unit`: run unit tests and Rust tests filtered by `unit_`.
 - `bun run test:integration`: run integration tests and Rust tests filtered by `integration_`.
 - `bun run tauri`: run Tauri CLI commands.
 
 ## Coding Style & Naming Conventions
 
-Use ES modules and Svelte 5 conventions. JavaScript is checked with TypeScript via `jsconfig.json`, so keep exported functions and data shapes clear. Prefer small, focused modules in `src/lib/`; keep Tauri command wrappers centralized, such as `src/lib/reminders.js`. Use `camelCase` for JavaScript variables/functions, `PascalCase` for Svelte components, and Rust `snake_case` for functions and files. Rust formatting is controlled by `rustfmt.toml`.
+Use ES modules and Svelte 5 conventions. Prefer TypeScript for new and changed frontend code: use `.ts` modules and `<script lang="ts">` in Svelte components whenever the toolchain supports it. Keep exported functions and data shapes clear. Prefer small, focused modules in `src/lib/`; keep Tauri command wrappers centralized, such as `src/lib/reminders.ts`. Use `camelCase` for JavaScript/TypeScript variables and functions, `PascalCase` for Svelte components, and Rust `snake_case` for functions and files. Rust formatting is controlled by `rustfmt.toml`.
 
 ## Testing Guidelines
 
-Frontend tests use Node's built-in test runner through Bun package scripts. Name test files `*.test.js` and place fast logic tests in `tests/unit/`; tests that mock or exercise command boundaries belong in `tests/integration/`. Rust tests run through Cargo using `src-tauri/Cargo.toml`. Before changing reminder behavior, locale handling, or Tauri commands, run at least the relevant `bun run test:unit` or `bun run test:integration`; run `bun test` before release-oriented changes.
+Frontend tests use Node's built-in test runner through Bun package scripts. Prefer `*.test.ts` for new and changed tests, with fast logic tests in `tests/unit/` and command-boundary tests in `tests/integration/`. Rust tests run through Cargo using `src-tauri/Cargo.toml`. Before changing reminder behavior, locale handling, or Tauri commands, run at least the relevant `bun run test:unit` or `bun run test:integration`; run `bun run test` before release-oriented changes.
 
 ## Commit & Pull Request Guidelines
 
