@@ -7,6 +7,7 @@
     let { onClose } = $props();
 
     let autostart = $state(false);
+    let hideMainWindowOnStartup = $state(false);
     let quitOnClose = $state(false);
     let minimizeToTray = $state(false);
     let soundVolume = $state(60);
@@ -15,6 +16,7 @@
     async function loadConfig() {
         const cfg = await invoke("get_app_config");
         autostart = cfg.autostart;
+        hideMainWindowOnStartup = cfg.hide_main_window_on_startup ?? false;
         quitOnClose = cfg.quit_on_close;
         minimizeToTray = cfg.minimize_to_tray;
         soundVolume = cfg.sound_volume ?? 60;
@@ -30,6 +32,13 @@
     async function toggleAutostart() {
         autostart = !autostart;
         await invoke("set_autostart", { enabled: autostart });
+    }
+
+    async function toggleHideMainWindowOnStartup() {
+        hideMainWindowOnStartup = !hideMainWindowOnStartup;
+        await invoke("set_hide_main_window_on_startup", {
+            enabled: hideMainWindowOnStartup,
+        });
     }
 
     async function toggleQuitOnClose() {
@@ -90,6 +99,27 @@
                     type="checkbox"
                     checked={autostart}
                     onchange={toggleAutostart}
+                />
+                <span class="toggle-track"
+                    ><span class="toggle-thumb"></span></span
+                >
+            </label>
+        </div>
+
+        <div class="setting-item">
+            <div class="setting-text">
+                <span class="setting-label"
+                    >{$t.settingsHideMainWindowOnStartup}</span
+                >
+                <span class="setting-desc"
+                    >{$t.settingsHideMainWindowOnStartupDesc}</span
+                >
+            </div>
+            <label class="toggle-wrap">
+                <input
+                    type="checkbox"
+                    checked={hideMainWindowOnStartup}
+                    onchange={toggleHideMainWindowOnStartup}
                 />
                 <span class="toggle-track"
                     ><span class="toggle-thumb"></span></span

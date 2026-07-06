@@ -1,8 +1,25 @@
 # TimeVeil
 
+## CMDS
+
+```bash
+
+# develpment
+cargo tauri dev
+
+# build release
+cargo tauri build
+
+# rust unit test
+cd src-tauri && cargo test
+
+# front-end test
+npm run test
+
+```
+
 ## TODO
 
-1. 添加个配置选项: 启动时隐藏主界面
 2. 隐藏原生标题栏, 拖拽内标题栏可移动窗口
 3. 隐藏tooltip: 全屏提示的退出按钮, 小窗口提示的关闭按钮, 配置按钮
 4. 调低全屏透明度

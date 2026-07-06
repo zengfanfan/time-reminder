@@ -266,6 +266,13 @@ pub fn on_overlay_closed(app: &tauri::AppHandle, label: &str, fullscreen: bool) 
     }
 }
 
+fn remaining_seconds_until(due: std::time::SystemTime, now: std::time::SystemTime) -> u64 {
+    match due.duration_since(now) {
+        Ok(duration) => duration.as_secs() + u64::from(duration.subsec_nanos() > 0),
+        Err(_) => 0,
+    }
+}
+
 pub async fn start_scheduler(app: tauri::AppHandle) {
     use std::time::{Duration as StdDuration, SystemTime};
     use tokio::time::{interval, Duration, MissedTickBehavior};
@@ -391,7 +398,7 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
                         0
                     } else {
                         match next_due.get(&r.id) {
-                            Some(due) => due.duration_since(now).unwrap_or_default().as_secs(),
+                            Some(due) => remaining_seconds_until(*due, now),
                             None => r.interval_secs,
                         }
                     }

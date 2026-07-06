@@ -38,7 +38,10 @@
 
     const win = getCurrentWebviewWindow();
     // Show window after content is ready to avoid WebView2 white flash
-    win.show();
+    const cfg = await invoke("get_app_config");
+    if (!cfg.hide_main_window_on_startup) {
+      win.show();
+    }
 
     // Tray menu can open settings
     await win.listen("open-settings", () => {

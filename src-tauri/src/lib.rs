@@ -15,6 +15,8 @@ use tauri_plugin_autostart::ManagerExt;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub autostart: bool,
+    #[serde(default)]
+    pub hide_main_window_on_startup: bool,
     pub quit_on_close: bool,
     pub minimize_to_tray: bool,
     pub locale: String,
@@ -30,6 +32,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             autostart: false,
+            hide_main_window_on_startup: false,
             quit_on_close: false,
             minimize_to_tray: false,
             locale: "en".to_string(),
@@ -223,6 +226,17 @@ fn set_minimize_to_tray(
 }
 
 #[tauri::command]
+fn set_hide_main_window_on_startup(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut cfg = state.app_config.lock().unwrap();
+    cfg.hide_main_window_on_startup = enabled;
+    cfg.save();
+    Ok(())
+}
+
+#[tauri::command]
 fn set_sound_volume(state: tauri::State<'_, AppState>, volume: u8) -> Result<(), String> {
     let mut cfg = state.app_config.lock().unwrap();
     cfg.sound_volume = volume.clamp(1, 100);
@@ -369,6 +383,7 @@ pub fn run() {
             set_autostart,
             set_quit_on_close,
             set_minimize_to_tray,
+            set_hide_main_window_on_startup,
             set_sound_volume,
             set_locale,
             show_main_window,
