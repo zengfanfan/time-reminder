@@ -503,7 +503,7 @@
 
   /* fullscreen preview (original style) */
   .preview-box--fullscreen {
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.95);
     border-radius: var(--radius);
     padding: 28px 20px;
     text-align: center;

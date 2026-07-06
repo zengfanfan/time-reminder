@@ -205,7 +205,7 @@
   .backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(8, 10, 18, 0.92);
+    background: rgba(8, 10, 18, 0.95);
     backdrop-filter: blur(30px);
   }
 
