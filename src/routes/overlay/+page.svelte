@@ -119,7 +119,7 @@
     <div class="overlay">
       <div class="backdrop"></div>
 
-      <button class="btn-dismiss" onclick={dismiss} title={$t.dismiss}>
+      <button class="btn-dismiss" onclick={dismiss}>
         <svg
           width="22"
           height="22"
@@ -160,7 +160,7 @@
         <span class="corner-dot"></span>
         <span class="corner-title">{text}</span>
         <span class="corner-timer">{formatCountdown(countdown)}</span>
-        <button class="corner-close" onclick={dismiss} title={$t.dismiss}>
+        <button class="corner-close" onclick={dismiss} aria-label={$t.dismiss}>
           <svg
             width="14"
             height="14"

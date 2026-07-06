@@ -198,7 +198,7 @@
           showSettings = !showSettings;
           editing = null;
         }}
-        title={$t.settings}
+        aria-label={$t.settings}
       >
         <svg
           width="17"
