@@ -180,9 +180,12 @@ fn set_autostart(
         mgr.disable().map_err(|e| e.to_string())?;
     }
     let actual = mgr.is_enabled().unwrap_or(enabled);
-    let mut cfg = state.app_config.lock().unwrap();
-    cfg.autostart = actual;
-    cfg.save();
+    let cfg = {
+        let mut cfg = state.app_config.lock().unwrap();
+        cfg.autostart = actual;
+        cfg.save();
+        cfg.clone()
+    };
     sync_tray_menu(&app, &cfg);
     Ok(())
 }
@@ -193,9 +196,12 @@ fn set_quit_on_close(
     state: tauri::State<'_, AppState>,
     enabled: bool,
 ) -> Result<(), String> {
-    let mut cfg = state.app_config.lock().unwrap();
-    cfg.quit_on_close = enabled;
-    cfg.save();
+    let cfg = {
+        let mut cfg = state.app_config.lock().unwrap();
+        cfg.quit_on_close = enabled;
+        cfg.save();
+        cfg.clone()
+    };
     sync_tray_menu(&app, &cfg);
     Ok(())
 }
@@ -206,9 +212,12 @@ fn set_minimize_to_tray(
     state: tauri::State<'_, AppState>,
     enabled: bool,
 ) -> Result<(), String> {
-    let mut cfg = state.app_config.lock().unwrap();
-    cfg.minimize_to_tray = enabled;
-    cfg.save();
+    let cfg = {
+        let mut cfg = state.app_config.lock().unwrap();
+        cfg.minimize_to_tray = enabled;
+        cfg.save();
+        cfg.clone()
+    };
     sync_tray_menu(&app, &cfg);
     Ok(())
 }
@@ -223,9 +232,12 @@ fn set_sound_volume(state: tauri::State<'_, AppState>, volume: u8) -> Result<(),
 
 #[tauri::command]
 fn set_locale(app: AppHandle, state: tauri::State<'_, AppState>, locale: String) {
-    let mut cfg = state.app_config.lock().unwrap();
-    cfg.locale = locale;
-    cfg.save();
+    let cfg = {
+        let mut cfg = state.app_config.lock().unwrap();
+        cfg.locale = locale;
+        cfg.save();
+        cfg.clone()
+    };
     sync_tray_menu(&app, &cfg);
 }
 
@@ -382,62 +394,63 @@ pub fn run() {
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| {
-                    let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
-                    match event.id.as_ref() {
-                        "toggle_win" => {
-                            if let Some(win) = app.get_webview_window("main") {
-                                let visible = win.is_visible().unwrap_or(false);
-                                if visible {
-                                    let _ = win.hide();
-                                } else {
-                                    let _ = win.unminimize();
-                                    let _ = win.show();
-                                    let _ = win.set_focus();
-                                }
-                                sync_tray_menu(app, &cfg);
-                            }
-                        },
-                        "settings" => {
-                            if let Some(win) = app.get_webview_window("main") {
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "quit" => app.exit(0),
+                    "toggle_win" => {
+                        let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
+                        if let Some(win) = app.get_webview_window("main") {
+                            let visible = win.is_visible().unwrap_or(false);
+                            if visible {
+                                let _ = win.hide();
+                            } else {
                                 let _ = win.unminimize();
                                 let _ = win.show();
                                 let _ = win.set_focus();
-                                let _ = win.emit("open-settings", ());
                             }
-                        },
-                        "autostart" => {
-                            let _ = set_autostart_inner(app, !cfg.autostart);
-                        },
-                        "quit_on_close" => {
-                            {
-                                let state = app.state::<AppState>();
-                                let mut c = state.app_config.lock().unwrap();
-                                c.quit_on_close = !cfg.quit_on_close;
-                                c.save();
-                            }
-                            let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
-                            sync_tray_menu(app, &cfg2);
-                            if let Some(win) = app.get_webview_window("main") {
-                                let _ = win.emit("config-changed", ());
-                            }
-                        },
-                        "min_tray" => {
-                            {
-                                let state = app.state::<AppState>();
-                                let mut c = state.app_config.lock().unwrap();
-                                c.minimize_to_tray = !cfg.minimize_to_tray;
-                                c.save();
-                            }
-                            let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
-                            sync_tray_menu(app, &cfg2);
-                            if let Some(win) = app.get_webview_window("main") {
-                                let _ = win.emit("config-changed", ());
-                            }
-                        },
-                        "quit" => app.exit(0),
-                        _ => {},
-                    }
+                            sync_tray_menu(app, &cfg);
+                        }
+                    },
+                    "settings" => {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.unminimize();
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                            let _ = win.emit("open-settings", ());
+                        }
+                    },
+                    "autostart" => {
+                        let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
+                        let _ = set_autostart_inner(app, !cfg.autostart);
+                    },
+                    "quit_on_close" => {
+                        let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
+                        {
+                            let state = app.state::<AppState>();
+                            let mut c = state.app_config.lock().unwrap();
+                            c.quit_on_close = !cfg.quit_on_close;
+                            c.save();
+                        }
+                        let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
+                        sync_tray_menu(app, &cfg2);
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.emit("config-changed", ());
+                        }
+                    },
+                    "min_tray" => {
+                        let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
+                        {
+                            let state = app.state::<AppState>();
+                            let mut c = state.app_config.lock().unwrap();
+                            c.minimize_to_tray = !cfg.minimize_to_tray;
+                            c.save();
+                        }
+                        let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
+                        sync_tray_menu(app, &cfg2);
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.emit("config-changed", ());
+                        }
+                    },
+                    _ => {},
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {

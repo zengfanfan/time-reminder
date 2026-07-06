@@ -167,12 +167,12 @@ fn relayout_corners(app: &tauri::AppHandle) {
 }
 
 /// Create a new overlay window for one reminder firing.
-pub fn spawn_overlay(app: &tauri::AppHandle, reminder: &ReminderConfig, sound_volume: u8) {
+pub fn spawn_overlay(app: &tauri::AppHandle, reminder: &ReminderConfig, sound_volume: u8) -> bool {
     let label = format!("overlay-{}", reminder.id);
 
     // If a window for this reminder is already showing, don't spawn a second one.
     if app.get_webview_window(&label).is_some() {
-        return;
+        return true;
     }
 
     let payload = serde_json::json!({
@@ -234,6 +234,7 @@ pub fn spawn_overlay(app: &tauri::AppHandle, reminder: &ReminderConfig, sound_vo
                 relayout_corners(&app2);
                 let _ = win.show();
             }
+            true
         },
         Err(e) => {
             eprintln!("[overlay] Failed to create window {label}: {e}");
@@ -246,6 +247,7 @@ pub fn spawn_overlay(app: &tauri::AppHandle, reminder: &ReminderConfig, sound_vo
                     stack.retain(|(l, _)| l != &label);
                 }
             }
+            false
         },
     }
 }
@@ -265,15 +267,24 @@ pub fn on_overlay_closed(app: &tauri::AppHandle, label: &str, fullscreen: bool) 
 }
 
 pub async fn start_scheduler(app: tauri::AppHandle) {
-    use tokio::time::{interval, Duration};
+    use std::time::{Duration as StdDuration, SystemTime};
+    use tokio::time::{interval, Duration, MissedTickBehavior};
 
-    let mut last_triggered: HashMap<String, tokio::time::Instant> = HashMap::new();
+    let mut next_due: HashMap<String, SystemTime> = HashMap::new();
     // Tracks reminders currently being displayed — their timer does NOT count down.
-    let mut displaying: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut displaying: HashMap<String, SystemTime> = HashMap::new();
     let mut tick = interval(Duration::from_secs(1));
+    tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     loop {
         tick.tick().await;
+        let now = SystemTime::now();
+
+        let reminders = {
+            let state = app.state::<crate::AppState>();
+            let manager = state.reminder_manager.lock().unwrap();
+            manager.get_all()
+        };
 
         // ── Handle save-triggered reset (interval changed / new reminder) ──
         let reset_id = {
@@ -284,7 +295,9 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             }
         };
         if let Some(id) = reset_id {
-            last_triggered.insert(id.clone(), tokio::time::Instant::now());
+            if let Some(reminder) = reminders.iter().find(|r| r.id == id) {
+                next_due.insert(id.clone(), now + StdDuration::from_secs(reminder.interval_secs));
+            }
             displaying.remove(&id);
         }
 
@@ -297,15 +310,11 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             }
         };
         if let Some(id) = dismissed_id {
-            last_triggered.insert(id.clone(), tokio::time::Instant::now());
+            if let Some(reminder) = reminders.iter().find(|r| r.id == id) {
+                next_due.insert(id.clone(), now + StdDuration::from_secs(reminder.interval_secs));
+            }
             displaying.remove(&id);
         }
-
-        let reminders = {
-            let state = app.state::<crate::AppState>();
-            let manager = state.reminder_manager.lock().unwrap();
-            manager.get_all()
-        };
 
         let sound_volume = {
             let state = app.state::<crate::AppState>();
@@ -313,30 +322,63 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             v
         };
 
-        let now = tokio::time::Instant::now();
-
         // Clean up stale entries
         let active_ids: std::collections::HashSet<String> =
             reminders.iter().map(|r| r.id.clone()).collect();
-        last_triggered.retain(|id, _| active_ids.contains(id));
-        displaying.retain(|id| active_ids.contains(id));
+        let reminder_map: HashMap<String, ReminderConfig> =
+            reminders.iter().map(|r| (r.id.clone(), r.clone())).collect();
+        next_due.retain(|id, _| active_ids.contains(id));
+        let mut finished_displaying = Vec::new();
+        displaying.retain(|id, started_at| {
+            let Some(reminder) = reminder_map.get(id) else {
+                finished_displaying.push(id.clone());
+                return false;
+            };
+            let label = format!("overlay-{id}");
+            let window_alive = app.get_webview_window(&label).is_some();
+            let elapsed = now.duration_since(*started_at).unwrap_or_default().as_secs();
+            let timed_out = elapsed > reminder.display_secs.saturating_add(10);
+
+            if !window_alive || timed_out {
+                if let Some(win) = app.get_webview_window(&label) {
+                    let _ = win.close();
+                }
+                on_overlay_closed(&app, &label, reminder.fullscreen);
+                finished_displaying.push(id.clone());
+                false
+            } else {
+                true
+            }
+        });
+
+        for id in finished_displaying {
+            if let Some(reminder) = reminder_map.get(&id) {
+                next_due.insert(id, now + StdDuration::from_secs(reminder.interval_secs));
+            }
+        }
 
         for reminder in reminders.iter().filter(|r| r.enabled) {
-            if displaying.contains(&reminder.id) {
+            if displaying.contains_key(&reminder.id) {
                 continue;
             }
 
-            let should_trigger = match last_triggered.get(&reminder.id) {
-                Some(last) => now.duration_since(*last).as_secs() >= reminder.interval_secs,
+            let should_trigger = match next_due.get(&reminder.id) {
+                Some(due) => now >= *due,
                 None => {
-                    last_triggered.insert(reminder.id.clone(), now);
+                    next_due.insert(
+                        reminder.id.clone(),
+                        now + StdDuration::from_secs(reminder.interval_secs),
+                    );
                     false
                 },
             };
 
             if should_trigger {
-                displaying.insert(reminder.id.clone());
-                spawn_overlay(&app, reminder, sound_volume);
+                if spawn_overlay(&app, reminder, sound_volume) {
+                    displaying.insert(reminder.id.clone(), now);
+                } else {
+                    next_due.insert(reminder.id.clone(), now + StdDuration::from_secs(5));
+                }
             }
         }
 
@@ -345,15 +387,11 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
             .iter()
             .map(|r| {
                 let remaining = if r.enabled {
-                    if displaying.contains(&r.id) {
+                    if displaying.contains_key(&r.id) {
                         0
                     } else {
-                        match last_triggered.get(&r.id) {
-                            Some(last) => {
-                                let elapsed =
-                                    now.duration_since(*last).as_secs_f64().round() as u64;
-                                r.interval_secs.saturating_sub(elapsed)
-                            },
+                        match next_due.get(&r.id) {
+                            Some(due) => due.duration_since(now).unwrap_or_default().as_secs(),
                             None => r.interval_secs,
                         }
                     }
