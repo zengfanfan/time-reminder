@@ -15,6 +15,15 @@
 
   let displayValue = $state(1);
   let displayUnit = $state("seconds");
+  /** @type {"interval" | "display" | null} */
+  let openUnitMenu = $state(null);
+
+  /** @type {Array<{ value: "seconds" | "minutes" | "hours", labelKey: "unitSeconds" | "unitMinutes" | "unitHours" }>} */
+  const unitOptions = [
+    { value: "seconds", labelKey: "unitSeconds" },
+    { value: "minutes", labelKey: "unitMinutes" },
+    { value: "hours", labelKey: "unitHours" },
+  ];
 
   function deriveUnit(secs) {
     if (secs >= 3600 && secs % 3600 === 0) return "hours";
@@ -133,6 +142,35 @@
     }
   }
 
+  /** @param {"interval" | "display"} menu */
+  function toggleUnitMenu(menu) {
+    openUnitMenu = openUnitMenu === menu ? null : menu;
+  }
+
+  function closeUnitMenu() {
+    openUnitMenu = null;
+  }
+
+  /**
+   * @param {KeyboardEvent} e
+   * @param {"interval" | "display"} menu
+   */
+  function handleUnitKeydown(e, menu) {
+    if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+      e.preventDefault();
+      openUnitMenu = menu;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeUnitMenu();
+    }
+  }
+
+  /** @param {KeyboardEvent} e */
+  function handleWindowKeydown(e) {
+    if (e.key === "Escape") closeUnitMenu();
+  }
+
   async function playBeep() {
     try {
       // Read current volume from backend so preview matches the real sound
@@ -165,7 +203,11 @@
   }
 </script>
 
-<svelte:window onkeydowncapture={handleDialogKeydown} />
+<svelte:window
+  onkeydowncapture={handleDialogKeydown}
+  onkeydown={handleWindowKeydown}
+  onclick={closeUnitMenu}
+/>
 
 <div class="editor">
   <textarea
@@ -182,18 +224,80 @@
       bind:value={intervalValue}
       min="1"
     />
-    <select class="timing-unit" bind:value={intervalUnit}>
-      <option value="seconds">{$t.unitSeconds}</option>
-      <option value="minutes">{$t.unitMinutes}</option>
-      <option value="hours">{$t.unitHours}</option>
-    </select>
+    <div class="unit-select">
+      <button
+        type="button"
+        class="timing-unit"
+        aria-haspopup="listbox"
+        aria-expanded={openUnitMenu === "interval"}
+        onclick={(e) => {
+          e.stopPropagation();
+          toggleUnitMenu("interval");
+        }}
+        onkeydown={(e) => handleUnitKeydown(e, "interval")}
+      >
+        {$t[
+          unitOptions.find((option) => option.value === intervalUnit)?.labelKey
+        ]}
+      </button>
+      {#if openUnitMenu === "interval"}
+        <div class="unit-menu" role="listbox">
+          {#each unitOptions as option}
+            <button
+              type="button"
+              class="unit-option"
+              class:unit-option--selected={intervalUnit === option.value}
+              role="option"
+              aria-selected={intervalUnit === option.value}
+              onclick={() => {
+                intervalUnit = option.value;
+                closeUnitMenu();
+              }}
+            >
+              {$t[option.labelKey]}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
     <span class="timing-label">{$t.remindOnceLabel}</span>
     <input class="timing-num" type="number" bind:value={displayValue} min="1" />
-    <select class="timing-unit" bind:value={displayUnit}>
-      <option value="seconds">{$t.unitSeconds}</option>
-      <option value="minutes">{$t.unitMinutes}</option>
-      <option value="hours">{$t.unitHours}</option>
-    </select>
+    <div class="unit-select">
+      <button
+        type="button"
+        class="timing-unit"
+        aria-haspopup="listbox"
+        aria-expanded={openUnitMenu === "display"}
+        onclick={(e) => {
+          e.stopPropagation();
+          toggleUnitMenu("display");
+        }}
+        onkeydown={(e) => handleUnitKeydown(e, "display")}
+      >
+        {$t[
+          unitOptions.find((option) => option.value === displayUnit)?.labelKey
+        ]}
+      </button>
+      {#if openUnitMenu === "display"}
+        <div class="unit-menu" role="listbox">
+          {#each unitOptions as option}
+            <button
+              type="button"
+              class="unit-option"
+              class:unit-option--selected={displayUnit === option.value}
+              role="option"
+              aria-selected={displayUnit === option.value}
+              onclick={() => {
+                displayUnit = option.value;
+                closeUnitMenu();
+              }}
+            >
+              {$t[option.labelKey]}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
   </div>
 
   <div class="sound-row">
@@ -408,8 +512,14 @@
     box-shadow: 0 0 0 2px var(--accent-soft);
   }
 
-  .timing-unit {
+  .unit-select {
+    position: relative;
     width: 72px;
+    flex-shrink: 0;
+  }
+
+  .timing-unit {
+    width: 100%;
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -426,10 +536,44 @@
     background-repeat: no-repeat;
     background-position: right 6px center;
     padding-right: 20px;
+    text-align: left;
   }
   .timing-unit:focus {
     border-color: var(--border-focus);
     box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+
+  .unit-menu {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    z-index: 20;
+    width: 90px;
+    overflow: hidden;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .unit-option {
+    display: block;
+    width: 100%;
+    padding: 5px 10px;
+    background: var(--bg-input);
+    border: 0;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--sans);
+    line-height: 1.6;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .unit-option:hover,
+  .unit-option--selected {
+    background: var(--bg-card-hover);
   }
 
   /* ── sound row ── */

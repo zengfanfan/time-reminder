@@ -33,6 +33,26 @@
   let suppressCloseHover = $state(false);
   let titlebarMenu = $state(null);
 
+  onMount(() => {
+    const contextMenuOptions = { capture: true };
+    /** @param {MouseEvent} e */
+    const handleContextMenu = (e) => {
+      if (import.meta.env.DEV) return;
+      if (isNativeEditableContext(e.target)) return;
+
+      e.preventDefault();
+    };
+    window.addEventListener("contextmenu", handleContextMenu, contextMenuOptions);
+
+    return () => {
+      window.removeEventListener(
+        "contextmenu",
+        handleContextMenu,
+        contextMenuOptions,
+      );
+    };
+  });
+
   onMount(async () => {
     initLocale();
     loadReminders().then((data) => {
@@ -64,7 +84,8 @@
   function handleKeydown(e) {
     if (e.key === "Escape") {
       e.preventDefault();
-      if (editing) handleBack();
+      if (titlebarMenu) closeTitlebarMenu();
+      else if (editing) handleBack();
       else if (showSettings) showSettings = false;
     } else if (editing && e.key === "Enter") {
       const tag = e.target.tagName;
@@ -129,6 +150,15 @@
     return Boolean(target?.closest?.("button, input, select, textarea, a"));
   }
 
+  /** @param {EventTarget | null} target */
+  function isNativeEditableContext(target) {
+    if (!(target instanceof Element)) return false;
+    const field = target.closest(
+      "input, textarea, [contenteditable=''], [contenteditable='true']",
+    );
+    return Boolean(field && !field.matches(":disabled, [readonly]"));
+  }
+
   async function handleTitlebarMouseDown(e) {
     if (e.button !== 0 || isTitlebarControl(e.target)) return;
     closeTitlebarMenu();
@@ -136,6 +166,13 @@
   }
 
   function handleTitlebarContextMenu(e) {
+    e.stopPropagation();
+
+    if (isNativeEditableContext(e.target)) {
+      closeTitlebarMenu();
+      return;
+    }
+
     e.preventDefault();
     titlebarMenu = {
       x: Math.min(e.clientX, window.innerWidth - 140),
@@ -155,7 +192,11 @@
   }
 </script>
 
-<svelte:window onclick={closeTitlebarMenu} onkeydown={handleKeydown} />
+<svelte:window
+  onclick={closeTitlebarMenu}
+  oncontextmenu={closeTitlebarMenu}
+  onkeydown={handleKeydown}
+/>
 
 <div class="panel">
   <header
