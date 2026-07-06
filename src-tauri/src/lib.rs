@@ -459,3 +459,34 @@ fn set_autostart_inner(app: &AppHandle, enabled: bool) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unit_app_config_default_values_match_startup_assumptions() {
+        let cfg = AppConfig::default();
+
+        assert!(!cfg.autostart);
+        assert!(!cfg.hide_main_window_on_startup);
+        assert_eq!(cfg.locale, "en");
+        assert_eq!(cfg.sound_volume, 60);
+    }
+
+    #[test]
+    fn unit_app_config_deserializes_legacy_config_defaults() {
+        let cfg: AppConfig = serde_json::from_str(
+            r#"{
+                "autostart": true,
+                "locale": "zh"
+            }"#,
+        )
+        .expect("legacy app config should deserialize");
+
+        assert!(cfg.autostart);
+        assert!(!cfg.hide_main_window_on_startup);
+        assert_eq!(cfg.locale, "zh");
+        assert_eq!(cfg.sound_volume, default_sound_volume());
+    }
+}

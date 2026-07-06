@@ -422,3 +422,116 @@ pub async fn start_scheduler(app: tauri::AppHandle) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    fn reminder(id: &str, interval_secs: u64) -> ReminderConfig {
+        ReminderConfig {
+            id: id.to_string(),
+            name: format!("Reminder {id}"),
+            text: "Move".to_string(),
+            interval_secs,
+            display_secs: 10,
+            enabled: true,
+            play_sound: true,
+            fullscreen: false,
+        }
+    }
+
+    #[test]
+    fn unit_upsert_adds_and_replaces_by_id() {
+        let mut manager = ReminderManager::default();
+
+        assert!(manager.upsert(reminder("a", 60)));
+        assert_eq!(manager.reminders.len(), 1);
+
+        let mut updated = reminder("a", 120);
+        updated.enabled = false;
+        assert!(!manager.upsert(updated.clone()));
+
+        assert_eq!(manager.reminders, vec![updated]);
+    }
+
+    #[test]
+    fn unit_upsert_checked_reports_only_interval_changes() {
+        let mut manager = ReminderManager::default();
+
+        assert_eq!(manager.upsert_checked(reminder("a", 60)), (true, true));
+
+        let mut same_interval = reminder("a", 60);
+        same_interval.text = "Changed text".to_string();
+        assert_eq!(manager.upsert_checked(same_interval), (false, false));
+
+        assert_eq!(manager.upsert_checked(reminder("a", 120)), (false, true));
+    }
+
+    #[test]
+    fn unit_remove_and_set_enabled_ignore_missing_ids() {
+        let mut manager =
+            ReminderManager { reminders: vec![reminder("a", 60), reminder("b", 120)] };
+
+        manager.set_enabled("b", false);
+        manager.set_enabled("missing", false);
+        assert!(!manager.reminders.iter().find(|r| r.id == "b").unwrap().enabled);
+
+        manager.remove("a");
+        manager.remove("missing");
+        assert_eq!(manager.reminders.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), vec!["b"]);
+    }
+
+    #[test]
+    fn unit_remaining_seconds_until_rounds_up_partial_seconds() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+
+        assert_eq!(remaining_seconds_until(now + Duration::from_millis(1), now), 1);
+        assert_eq!(remaining_seconds_until(now + Duration::from_secs(2), now), 2);
+        assert_eq!(remaining_seconds_until(now - Duration::from_secs(1), now), 0);
+    }
+
+    #[test]
+    fn integration_manager_flow_add_update_toggle_and_remove() {
+        let mut manager = ReminderManager::default();
+
+        let first = reminder("focus", 1500);
+        let second = reminder("break", 300);
+        assert_eq!(manager.upsert_checked(first), (true, true));
+        assert_eq!(manager.upsert_checked(second), (true, true));
+
+        manager.set_enabled("break", false);
+        let break_reminder =
+            manager.get_all().into_iter().find(|r| r.id == "break").expect("break reminder exists");
+        assert!(!break_reminder.enabled);
+
+        let mut updated = reminder("focus", 1800);
+        updated.fullscreen = true;
+        assert_eq!(manager.upsert_checked(updated.clone()), (false, true));
+        assert_eq!(
+            manager.get_all().into_iter().find(|r| r.id == "focus").expect("focus reminder exists"),
+            updated
+        );
+
+        manager.remove("break");
+        assert_eq!(manager.get_all(), vec![updated]);
+    }
+
+    #[test]
+    fn unit_reminder_config_deserializes_missing_fullscreen_as_false() {
+        let config: ReminderConfig = serde_json::from_str(
+            r#"{
+                "id": "legacy",
+                "name": "Legacy",
+                "text": "Move",
+                "interval_secs": 60,
+                "display_secs": 10,
+                "enabled": true,
+                "play_sound": false
+            }"#,
+        )
+        .expect("legacy reminder config should deserialize");
+
+        assert!(!config.fullscreen);
+    }
+}

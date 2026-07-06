@@ -13,8 +13,8 @@ cargo tauri dev
 # build release
 cargo tauri build
 
-# rust unit test
-cd src-tauri && cargo test
+# run test
+node --run test
 
 ```
 

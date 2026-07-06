@@ -8,6 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
+    "test": "node --test --experimental-test-module-mocks \"tests/**/*.test.js\" && cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:unit": "node --test \"tests/unit/*.test.js\" && cargo test --manifest-path src-tauri/Cargo.toml unit_",
+    "test:integration": "node --test --experimental-test-module-mocks \"tests/integration/*.test.js\" && cargo test --manifest-path src-tauri/Cargo.toml integration_",
     "tauri": "tauri",
     "clean:hard": "rm -rf node_modules bun.lockb src-tauri/target dist build .svelte-kit src-tauri/gen"
   },
