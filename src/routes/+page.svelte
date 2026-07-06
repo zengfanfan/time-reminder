@@ -130,12 +130,20 @@
     isNew = false;
     showSettings = false;
   }
+
+  async function minimizeWindow() {
+    await getCurrentWebviewWindow().minimize();
+  }
+
+  async function closeWindow() {
+    await getCurrentWebviewWindow().close();
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="panel">
-  <header class="topbar">
+  <header class="topbar" data-tauri-drag-region>
     {#if editing}
       <button class="btn-icon" onclick={handleBack}>
         <svg
@@ -173,6 +181,7 @@
         </svg>
       </button>
       <h1>{$t.settings}</h1>
+      <div class="topbar-spacer"></div>
     {:else}
       <div class="logo">
         <svg
@@ -215,6 +224,42 @@
         </svg>
       </button>
     {/if}
+    <div class="window-controls">
+      <button
+        class="window-control"
+        onclick={minimizeWindow}
+        aria-label={$locale === "zh" ? "最小化" : "Minimize"}
+        title={$locale === "zh" ? "最小化" : "Minimize"}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+        >
+          <path d="M6 12h12" />
+        </svg>
+      </button>
+      <button
+        class="window-control close"
+        onclick={closeWindow}
+        aria-label={$locale === "zh" ? "关闭" : "Close"}
+        title={$locale === "zh" ? "关闭" : "Close"}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+        >
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
   </header>
 
   <main class="content">
@@ -297,19 +342,31 @@
 </div>
 
 <style>
+  :global(html),
+  :global(body) {
+    background: transparent;
+  }
+
   .panel {
     height: 100vh;
     display: flex;
     flex-direction: column;
     background: var(--bg-main);
+    border: 1px solid rgba(99, 122, 190, 0.22);
+    border-radius: 14px;
+    overflow: hidden;
   }
 
   .topbar {
-    padding: 16px 20px;
+    padding: 12px 12px 12px 18px;
     display: flex;
     align-items: center;
     gap: 12px;
-    border-bottom: 1px solid var(--border);
+    min-height: 58px;
+    background:
+      linear-gradient(135deg, rgba(78, 123, 255, 0.2), rgba(52, 211, 153, 0.08)),
+      #151a28;
+    border-bottom: 1px solid rgba(78, 123, 255, 0.28);
     -webkit-app-region: drag;
   }
 
@@ -321,6 +378,17 @@
 
   .topbar-spacer {
     flex: 1;
+  }
+
+  .window-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-left: 16px;
+    margin-left: 6px;
+    border-left: 1px dashed rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+    -webkit-app-region: no-drag;
   }
 
   .topbar-label {
@@ -361,27 +429,31 @@
   }
 
   .btn-icon {
-    background: none;
+    background: rgba(255, 255, 255, 0.03);
     border: none;
-    color: var(--text-secondary);
+    color: #b8c0df;
     cursor: pointer;
-    padding: 4px;
-    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
     display: flex;
+    align-items: center;
+    justify-content: center;
     -webkit-app-region: no-drag;
   }
   .btn-icon:hover {
-    background: var(--bg-card);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
   }
 
   .btn-lang {
     -webkit-app-region: no-drag;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 10px;
-    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    height: 30px;
+    padding: 0 10px;
+    color: #c9d1ef;
     font-size: 12px;
     font-weight: 600;
     font-family: var(--sans);
@@ -391,8 +463,32 @@
     flex-shrink: 0;
   }
   .btn-lang:hover {
-    border-color: var(--accent);
-    color: var(--accent);
+    background: rgba(78, 123, 255, 0.16);
+    border-color: rgba(78, 123, 255, 0.42);
+    color: #eef;
+  }
+
+  .window-control {
+    width: 32px;
+    height: 30px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #aeb8d8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    -webkit-app-region: no-drag;
+  }
+  .window-control:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+  .window-control.close:hover {
+    background: var(--danger);
+    color: #fff;
   }
 
   .content {
