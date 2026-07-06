@@ -13,6 +13,17 @@
   let fullscreen = $state(false);
   let soundVolume = $state(60);
   let visible = $state(false);
+  let exitChallengeOpen = $state(false);
+  let exitChallengeLeft = $state(0);
+  let exitChallengeRight = $state(0);
+  let exitChallengeAnswer = $state("");
+  let exitChallengeError = $state(false);
+  /** @type {HTMLInputElement | null} */
+  let exitChallengeInput = $state(null);
+  const exitChallengeLabels = {
+    answer: "\u9000\u51fa\u6821\u9a8c\u7b54\u6848",
+    error: "\u7b54\u9519\u4e86\uff0c\u518d\u8bd5\u4e00\u6b21\u3002",
+  };
 
   let timer = null;
   let win = null;
@@ -80,6 +91,54 @@
     }).catch(() => {});
   }
 
+  async function requestDismiss() {
+    if (!fullscreen) {
+      dismiss();
+      return;
+    }
+
+    exitChallengeLeft = randomTwoDigit();
+    exitChallengeRight = randomTwoDigit();
+    exitChallengeAnswer = "";
+    exitChallengeError = false;
+    exitChallengeOpen = true;
+    await tick();
+    exitChallengeInput?.focus();
+  }
+
+  function randomTwoDigit() {
+    return Math.floor(Math.random() * 90) + 10;
+  }
+
+  function cancelExitChallenge() {
+    exitChallengeOpen = false;
+    exitChallengeAnswer = "";
+    exitChallengeError = false;
+  }
+
+  /** @param {SubmitEvent} e */
+  function submitExitChallenge(e) {
+    e.preventDefault();
+
+    const answer = Number(exitChallengeAnswer);
+    if (answer === exitChallengeLeft * exitChallengeRight) {
+      dismiss();
+      return;
+    }
+
+    exitChallengeError = true;
+    exitChallengeAnswer = "";
+    exitChallengeInput?.focus();
+  }
+
+  /** @param {KeyboardEvent} e */
+  function handleExitChallengeKeydown(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelExitChallenge();
+    }
+  }
+
   function playBeep() {
     try {
       const vol = (soundVolume ?? 60) / 100;
@@ -119,7 +178,7 @@
     <div class="overlay">
       <div class="backdrop"></div>
 
-      <button class="btn-dismiss" onclick={dismiss}>
+      <button class="btn-dismiss" onclick={requestDismiss}>
         <svg
           width="22"
           height="22"
@@ -144,6 +203,41 @@
         <p class="message">{text}</p>
         <p class="hint">{$t.dismissHint}</p>
       </div>
+
+      {#if exitChallengeOpen}
+        <div
+          class="exit-challenge"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exit-challenge-title"
+          tabindex="-1"
+          onkeydown={handleExitChallengeKeydown}
+        >
+          <form class="exit-challenge-panel" onsubmit={submitExitChallenge}>
+            <p id="exit-challenge-title" class="exit-challenge-title">
+              {exitChallengeLeft} x {exitChallengeRight} = ?
+            </p>
+            <input
+              bind:this={exitChallengeInput}
+              bind:value={exitChallengeAnswer}
+              class="exit-challenge-input"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              autocomplete="off"
+              aria-label={exitChallengeLabels.answer}
+            />
+            {#if exitChallengeError}
+              <p class="exit-challenge-error">{exitChallengeLabels.error}</p>
+            {/if}
+            <div class="exit-challenge-actions">
+              <button type="button" onclick={cancelExitChallenge}>
+                {$t.confirmNo}
+              </button>
+              <button type="submit">{$t.dismiss}</button>
+            </div>
+          </form>
+        </div>
+      {/if}
     </div>
   {:else}
     <!-- ── Corner notification ── -->
@@ -232,6 +326,90 @@
     background: rgba(255, 78, 106, 0.15);
     border-color: rgba(255, 78, 106, 0.4);
     color: #ff4e6a;
+  }
+
+  .exit-challenge {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8, 10, 18, 0.55);
+    backdrop-filter: blur(10px);
+  }
+
+  .exit-challenge-panel {
+    width: min(360px, calc(100vw - 48px));
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: rgba(22, 25, 38, 0.96);
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+  }
+
+  .exit-challenge-title {
+    margin: 0;
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .exit-challenge-input {
+    height: 48px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 24px;
+    text-align: center;
+    outline: none;
+  }
+
+  .exit-challenge-input:focus {
+    border-color: #4e7bff;
+    box-shadow: 0 0 0 3px rgba(78, 123, 255, 0.2);
+  }
+
+  .exit-challenge-error {
+    margin: -4px 0 0;
+    color: #ff6b7d;
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .exit-challenge-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .exit-challenge-actions button {
+    height: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.82);
+    font-family: var(--sans);
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .exit-challenge-actions button:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .exit-challenge-actions button[type="submit"] {
+    border-color: rgba(78, 123, 255, 0.45);
+    background: rgba(78, 123, 255, 0.2);
+    color: #fff;
   }
 
   .center-content {
