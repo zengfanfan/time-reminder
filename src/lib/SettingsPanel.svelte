@@ -8,8 +8,6 @@
 
     let autostart = $state(false);
     let hideMainWindowOnStartup = $state(false);
-    let quitOnClose = $state(false);
-    let minimizeToTray = $state(false);
     let soundVolume = $state(60);
     let loading = $state(true);
 
@@ -17,8 +15,6 @@
         const cfg = await invoke("get_app_config");
         autostart = cfg.autostart;
         hideMainWindowOnStartup = cfg.hide_main_window_on_startup ?? false;
-        quitOnClose = cfg.quit_on_close;
-        minimizeToTray = cfg.minimize_to_tray;
         soundVolume = cfg.sound_volume ?? 60;
         loading = false;
     }
@@ -39,16 +35,6 @@
         await invoke("set_hide_main_window_on_startup", {
             enabled: hideMainWindowOnStartup,
         });
-    }
-
-    async function toggleQuitOnClose() {
-        quitOnClose = !quitOnClose;
-        await invoke("set_quit_on_close", { enabled: quitOnClose });
-    }
-
-    async function toggleMinimizeToTray() {
-        minimizeToTray = !minimizeToTray;
-        await invoke("set_minimize_to_tray", { enabled: minimizeToTray });
     }
 
     async function handleVolumeChange(e) {
@@ -120,41 +106,6 @@
                     type="checkbox"
                     checked={hideMainWindowOnStartup}
                     onchange={toggleHideMainWindowOnStartup}
-                />
-                <span class="toggle-track"
-                    ><span class="toggle-thumb"></span></span
-                >
-            </label>
-        </div>
-
-        <div class="setting-item">
-            <div class="setting-text">
-                <span class="setting-label">{$t.settingsQuitOnClose}</span>
-                <span class="setting-desc">{$t.settingsQuitOnCloseDesc}</span>
-            </div>
-            <label class="toggle-wrap">
-                <input
-                    type="checkbox"
-                    checked={quitOnClose}
-                    onchange={toggleQuitOnClose}
-                />
-                <span class="toggle-track"
-                    ><span class="toggle-thumb"></span></span
-                >
-            </label>
-        </div>
-
-        <div class="setting-item">
-            <div class="setting-text">
-                <span class="setting-label">{$t.settingsMinimizeToTray}</span>
-                <span class="setting-desc">{$t.settingsMinimizeToTrayDesc}</span
-                >
-            </div>
-            <label class="toggle-wrap">
-                <input
-                    type="checkbox"
-                    checked={minimizeToTray}
-                    onchange={toggleMinimizeToTray}
                 />
                 <span class="toggle-track"
                     ><span class="toggle-thumb"></span></span

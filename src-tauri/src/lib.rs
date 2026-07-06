@@ -321,30 +321,11 @@ fn build_tray_menu(app: &AppHandle, cfg: &AppConfig) -> tauri::Result<Menu<tauri
         cfg.autostart,
         None::<&str>,
     )?;
-    let quit_close = CheckMenuItem::with_id(
-        app,
-        "quit_on_close",
-        if zh { "关闭时退出" } else { "Quit on Close" },
-        true,
-        cfg.quit_on_close,
-        None::<&str>,
-    )?;
-    let min_tray = CheckMenuItem::with_id(
-        app,
-        "min_tray",
-        if zh { "最小化到托盘" } else { "Minimize to Tray" },
-        true,
-        cfg.minimize_to_tray,
-        None::<&str>,
-    )?;
     let sep2 = PredefinedMenuItem::separator(app)?;
     let quit =
         MenuItem::with_id(app, "quit", if zh { "退出" } else { "Quit" }, true, None::<&str>)?;
 
-    Menu::with_items(
-        app,
-        &[&toggle_win, &settings, &sep, &autostart, &quit_close, &min_tray, &sep2, &quit],
-    )
+    Menu::with_items(app, &[&toggle_win, &settings, &sep, &autostart, &sep2, &quit])
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -437,34 +418,6 @@ pub fn run() {
                         let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
                         let _ = set_autostart_inner(app, !cfg.autostart);
                     },
-                    "quit_on_close" => {
-                        let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
-                        {
-                            let state = app.state::<AppState>();
-                            let mut c = state.app_config.lock().unwrap();
-                            c.quit_on_close = !cfg.quit_on_close;
-                            c.save();
-                        }
-                        let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
-                        sync_tray_menu(app, &cfg2);
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.emit("config-changed", ());
-                        }
-                    },
-                    "min_tray" => {
-                        let cfg = app.state::<AppState>().app_config.lock().unwrap().clone();
-                        {
-                            let state = app.state::<AppState>();
-                            let mut c = state.app_config.lock().unwrap();
-                            c.minimize_to_tray = !cfg.minimize_to_tray;
-                            c.save();
-                        }
-                        let cfg2 = app.state::<AppState>().app_config.lock().unwrap().clone();
-                        sync_tray_menu(app, &cfg2);
-                        if let Some(win) = app.get_webview_window("main") {
-                            let _ = win.emit("config-changed", ());
-                        }
-                    },
                     _ => {},
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -507,13 +460,9 @@ pub fn run() {
                 let state = app.state::<AppState>();
                 let cfg = state.app_config.lock().unwrap().clone();
                 if let WindowEvent::CloseRequested { api, .. } = event {
-                    if cfg.quit_on_close {
-                        app.exit(0);
-                    } else {
-                        let _ = window.hide();
-                        api.prevent_close();
-                        sync_tray_menu(app, &cfg);
-                    }
+                    let _ = window.hide();
+                    api.prevent_close();
+                    sync_tray_menu(app, &cfg);
                 }
             }
 

@@ -6,15 +6,15 @@
   let { config, isNew, onSave, onDelete, name, onNameChange, triggerSave } =
     $props();
 
-  let text = $state(config.text);
-  let playSound = $state(config.play_sound);
-  let fullscreen = $state(config.fullscreen ?? false);
+  let text = $state("");
+  let playSound = $state(false);
+  let fullscreen = $state(false);
 
-  let intervalValue = $state(deriveValue(config.interval_secs));
-  let intervalUnit = $state(deriveUnit(config.interval_secs));
+  let intervalValue = $state(1);
+  let intervalUnit = $state("minutes");
 
-  let displayValue = $state(deriveValue(config.display_secs));
-  let displayUnit = $state(deriveUnit(config.display_secs));
+  let displayValue = $state(1);
+  let displayUnit = $state("seconds");
 
   function deriveUnit(secs) {
     if (secs >= 3600 && secs % 3600 === 0) return "hours";
@@ -53,12 +53,28 @@
     return `${secs}`;
   }
 
-  let prevTriggerSave = triggerSave;
+  /** @type {number | null} */
+  let prevTriggerSave = $state(null);
   $effect(() => {
-    if (triggerSave > prevTriggerSave) {
-      prevTriggerSave = triggerSave;
+    const currentTriggerSave = triggerSave;
+    if (prevTriggerSave === null) {
+      prevTriggerSave = currentTriggerSave;
+      return;
+    }
+    if (currentTriggerSave > prevTriggerSave) {
+      prevTriggerSave = currentTriggerSave;
       handleSubmit();
     }
+  });
+
+  $effect(() => {
+    text = config.text;
+    playSound = config.play_sound;
+    fullscreen = config.fullscreen ?? false;
+    intervalValue = deriveValue(config.interval_secs);
+    intervalUnit = deriveUnit(config.interval_secs);
+    displayValue = deriveValue(config.display_secs);
+    displayUnit = deriveUnit(config.display_secs);
   });
 
   function handleSubmit() {
@@ -99,6 +115,20 @@
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
+      cancelDelete();
+    }
+  }
+
+  /** @param {MouseEvent} e */
+  function handleBackdropClick(e) {
+    if (e.target === e.currentTarget) cancelDelete();
+  }
+
+  /** @param {KeyboardEvent} e */
+  function handleBackdropKeydown(e) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
       cancelDelete();
     }
   }
@@ -293,8 +323,15 @@
   </div>
 
   {#if showDeleteConfirm}
-    <div class="dialog-backdrop" onclick={cancelDelete}>
-      <div class="dialog" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="dialog-backdrop"
+      role="button"
+      tabindex="0"
+      aria-label={$t.confirmNo}
+      onclick={handleBackdropClick}
+      onkeydown={handleBackdropKeydown}
+    >
+      <div class="dialog" role="dialog" aria-modal="true">
         <p class="dialog-title">{$t.deleteConfirm}</p>
         <p class="dialog-hint">{$t.deleteConfirmHint}</p>
         <div class="dialog-actions">

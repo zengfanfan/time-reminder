@@ -25,10 +25,13 @@
   let editing = $state(null);
   let editingName = $state("");
   let isNew = $state(false);
-  let nameInput;
+  /** @type {HTMLInputElement | null} */
+  let nameInput = $state(null);
   let triggerSave = $state(0);
   let countdowns = $state({});
   let showSettings = $state(false);
+  let suppressCloseHover = $state(false);
+  let titlebarMenu = $state(null);
 
   onMount(async () => {
     initLocale();
@@ -48,19 +51,6 @@
       showSettings = true;
       editing = null;
     });
-
-    // Minimize to tray
-    async function checkMinimized() {
-      const minimized = await win.isMinimized();
-      if (minimized) {
-        const cfg = await invoke("get_app_config");
-        if (cfg.minimize_to_tray) {
-          await invoke("hide_main_window");
-        }
-      }
-    }
-    await win.listen("tauri://blur", checkMinimized);
-    await win.onResized(checkMinimized);
 
     // Rust broadcasts every second — directly drive countdowns from it
     await win.listen("countdown-tick", (event) => {
@@ -131,21 +121,51 @@
     showSettings = false;
   }
 
+  function closeTitlebarMenu() {
+    titlebarMenu = null;
+  }
+
+  function isTitlebarControl(target) {
+    return Boolean(target?.closest?.("button, input, select, textarea, a"));
+  }
+
+  async function handleTitlebarMouseDown(e) {
+    if (e.button !== 0 || isTitlebarControl(e.target)) return;
+    closeTitlebarMenu();
+    await getCurrentWebviewWindow().startDragging();
+  }
+
+  function handleTitlebarContextMenu(e) {
+    e.preventDefault();
+    titlebarMenu = {
+      x: Math.min(e.clientX, window.innerWidth - 140),
+      y: Math.min(e.clientY, window.innerHeight - 82),
+    };
+  }
+
   async function minimizeWindow() {
+    closeTitlebarMenu();
     await getCurrentWebviewWindow().minimize();
   }
 
   async function closeWindow() {
+    closeTitlebarMenu();
+    suppressCloseHover = true;
     await getCurrentWebviewWindow().close();
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onclick={closeTitlebarMenu} onkeydown={handleKeydown} />
 
 <div class="panel">
-  <header class="topbar" data-tauri-drag-region>
+  <header
+    class="topbar"
+    role="presentation"
+    onmousedown={handleTitlebarMouseDown}
+    oncontextmenu={handleTitlebarContextMenu}
+  >
     {#if editing}
-      <button class="btn-icon" onclick={handleBack}>
+      <button class="btn-icon" onclick={handleBack} aria-label="Back">
         <svg
           width="18"
           height="18"
@@ -168,7 +188,7 @@
         placeholder={$t.titlePlaceholder}
       />
     {:else if showSettings}
-      <button class="btn-icon" onclick={handleBack}>
+      <button class="btn-icon" onclick={handleBack} aria-label="Back">
         <svg
           width="18"
           height="18"
@@ -226,27 +246,11 @@
     {/if}
     <div class="window-controls">
       <button
-        class="window-control"
-        onclick={minimizeWindow}
-        aria-label={$locale === "zh" ? "最小化" : "Minimize"}
-        title={$locale === "zh" ? "最小化" : "Minimize"}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.4"
-        >
-          <path d="M6 12h12" />
-        </svg>
-      </button>
-      <button
         class="window-control close"
+        class:suppress-hover={suppressCloseHover}
         onclick={closeWindow}
+        onmouseenter={() => (suppressCloseHover = false)}
         aria-label={$locale === "zh" ? "关闭" : "Close"}
-        title={$locale === "zh" ? "关闭" : "Close"}
       >
         <svg
           width="14"
@@ -260,6 +264,21 @@
         </svg>
       </button>
     </div>
+    {#if titlebarMenu}
+      <div
+        class="titlebar-menu"
+        style={`left: ${titlebarMenu.x}px; top: ${titlebarMenu.y}px;`}
+        role="menu"
+        tabindex="-1"
+      >
+        <button type="button" role="menuitem" onclick={minimizeWindow}>
+          {$locale === "zh" ? "最小化" : "Minimize"}
+        </button>
+        <button type="button" role="menuitem" onclick={closeWindow}>
+          {$locale === "zh" ? "关闭" : "Close"}
+        </button>
+      </div>
+    {/if}
   </header>
 
   <main class="content">
@@ -348,7 +367,9 @@
   }
 
   .panel {
-    height: 100vh;
+    width: calc(100vw - 2px);
+    height: calc(100vh - 2px);
+    margin: 1px;
     display: flex;
     flex-direction: column;
     background: var(--bg-main);
@@ -367,7 +388,7 @@
       linear-gradient(135deg, rgba(78, 123, 255, 0.2), rgba(52, 211, 153, 0.08)),
       #151a28;
     border-bottom: 1px solid rgba(78, 123, 255, 0.28);
-    -webkit-app-region: drag;
+    user-select: none;
   }
 
   .topbar h1 {
@@ -488,6 +509,38 @@
   }
   .window-control.close:hover {
     background: var(--danger);
+    color: #fff;
+  }
+  .window-control.close.suppress-hover:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #aeb8d8;
+  }
+
+  .titlebar-menu {
+    position: fixed;
+    z-index: 1000;
+    width: 132px;
+    padding: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  }
+  .titlebar-menu button {
+    width: 100%;
+    height: 28px;
+    padding: 0 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: var(--sans);
+    text-align: left;
+    cursor: default;
+    border-radius: 6px;
+  }
+  .titlebar-menu button:hover {
+    background: var(--accent-soft);
     color: #fff;
   }
 
