@@ -1,11 +1,11 @@
 import { writable, derived } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 
-const STORAGE_KEY = "time-veil-locale";
+const STORAGE_KEY = "time-reminder-locale";
 
 const translations = {
     zh: {
-        appName: "TimeVeil",
+        appName: "TimeReminder",
         newReminder: "新建提醒",
         editReminder: "编辑提醒",
         titlePlaceholder: "标题",
@@ -36,7 +36,7 @@ const translations = {
         settings: "配置",
         switchLanguage: "Switch to English",
         settingsAutostart: "开机启动",
-        settingsAutostartDesc: "系统启动时自动运行 TimeVeil",
+        settingsAutostartDesc: "系统启动时自动运行 TimeReminder",
         settingsHideMainWindowOnStartup: "启动时隐藏主界面",
         settingsHideMainWindowOnStartupDesc: "启动后保持在托盘，不自动显示主界面",
         settingsSoundVolume: "提示音音量",
@@ -54,7 +54,7 @@ const translations = {
         durationS: (s) => `${s}秒`,
     },
     en: {
-        appName: "TimeVeil",
+        appName: "TimeReminder",
         newReminder: "New Reminder",
         editReminder: "Edit Reminder",
         titlePlaceholder: "Title",
@@ -85,7 +85,7 @@ const translations = {
         settings: "Settings",
         switchLanguage: "切换为中文",
         settingsAutostart: "Launch at startup",
-        settingsAutostartDesc: "Automatically start TimeVeil when the system boots",
+        settingsAutostartDesc: "Automatically start TimeReminder when the system boots",
         settingsHideMainWindowOnStartup: "Hide main window on startup",
         settingsHideMainWindowOnStartupDesc: "Start in the tray without showing the main window",
         settingsSoundVolume: "Sound Volume",

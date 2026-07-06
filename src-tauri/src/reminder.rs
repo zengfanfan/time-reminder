@@ -30,7 +30,7 @@ pub struct ReminderManager {
 
 fn config_path() -> PathBuf {
     let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-    path.push("time-veil");
+    path.push("time-reminder");
     fs::create_dir_all(&path).ok();
     path.push("reminders.json");
     path

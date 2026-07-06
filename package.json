@@ -1,5 +1,5 @@
 {
-  "name": "time-veil",
+  "name": "time-reminder",
   "version": "0.1.0",
   "description": "A periodic fullscreen reminder overlay app",
   "type": "module",

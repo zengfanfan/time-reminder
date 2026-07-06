@@ -1,12 +1,12 @@
 [package]
-name = "time-veil"
+name = "time-reminder"
 version = "0.1.0"
 description = "A periodic fullscreen reminder overlay app"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "time_veil_lib"
+name = "time_reminder_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

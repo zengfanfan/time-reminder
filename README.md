@@ -1,4 +1,4 @@
-# TimeVeil
+# TimeReminder
 
 A lightweight desktop app that periodically covers your screen with a fullscreen reminder overlay — great for eye breaks, posture checks, water reminders, or anything else you tend to forget while deep in work.
 
@@ -39,8 +39,8 @@ Download the latest release for your platform from the [Releases](../../releases
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-username/time-veil.git
-cd time-veil
+git clone https://github.com/your-username/time-reminder.git
+cd time-reminder
 
 # Install frontend dependencies
 bun install   # or: npm install

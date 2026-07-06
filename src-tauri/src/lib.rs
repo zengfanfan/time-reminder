@@ -43,7 +43,7 @@ impl Default for AppConfig {
 
 fn config_path() -> std::path::PathBuf {
     let mut p = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    p.push("time-veil");
+    p.push("time-reminder");
     std::fs::create_dir_all(&p).ok();
     p.push("app-config.json");
     p
@@ -386,7 +386,7 @@ pub fn run() {
 
             let menu = build_tray_menu(app.handle(), &cfg)?;
             let tray = TrayIconBuilder::with_id("main")
-                .tooltip("TimeVeil")
+                .tooltip("TimeReminder")
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .show_menu_on_left_click(false)

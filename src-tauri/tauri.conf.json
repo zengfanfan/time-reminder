@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "TimeVeil",
+  "productName": "TimeReminder",
   "version": "0.1.0",
-  "identifier": "com.timeveil.app",
+  "identifier": "com.timereminder.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "TimeVeil",
+        "title": "TimeReminder",
         "width": 520,
         "height": 640,
         "minWidth": 520,
