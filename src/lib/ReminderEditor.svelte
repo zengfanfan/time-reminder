@@ -1,53 +1,68 @@
-<script>
-  import { tick } from "svelte";
+<script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { t } from "$lib/i18n.js";
+  import { t } from "$lib/i18n";
+  import type { AppConfig, ReminderConfig, Translations } from "$lib/types";
 
-  let { config, isNew, onSave, onDelete, name, onNameChange, triggerSave } =
-    $props();
+  type Unit = "seconds" | "minutes" | "hours";
+  type UnitMenu = "interval" | "display";
+  type UnitLabelKey = "unitSeconds" | "unitMinutes" | "unitHours";
+
+  interface Props {
+    config: ReminderConfig;
+    isNew: boolean;
+    onSave: (config: ReminderConfig) => void | Promise<void>;
+    onDelete: (id: string) => void | Promise<void>;
+    name: string;
+    onNameChange?: (name: string) => void;
+    triggerSave: number;
+  }
+
+  let { config, isNew, onSave, onDelete, name, triggerSave }: Props = $props();
 
   let text = $state("");
   let playSound = $state(false);
   let fullscreen = $state(false);
 
   let intervalValue = $state(1);
-  let intervalUnit = $state("minutes");
+  let intervalUnit = $state<Unit>("minutes");
 
   let displayValue = $state(1);
-  let displayUnit = $state("seconds");
-  /** @type {"interval" | "display" | null} */
-  let openUnitMenu = $state(null);
+  let displayUnit = $state<Unit>("seconds");
+  let openUnitMenu = $state<UnitMenu | null>(null);
 
-  /** @type {Array<{ value: "seconds" | "minutes" | "hours", labelKey: "unitSeconds" | "unitMinutes" | "unitHours" }>} */
-  const unitOptions = [
+  const unitOptions: Array<{ value: Unit; labelKey: UnitLabelKey }> = [
     { value: "seconds", labelKey: "unitSeconds" },
     { value: "minutes", labelKey: "unitMinutes" },
     { value: "hours", labelKey: "unitHours" },
   ];
 
-  function deriveUnit(secs) {
+  function deriveUnit(secs: number): Unit {
     if (secs >= 3600 && secs % 3600 === 0) return "hours";
     if (secs >= 60 && secs % 60 === 0) return "minutes";
     return "seconds";
   }
 
-  function deriveValue(secs) {
+  function deriveValue(secs: number): number {
     if (secs >= 3600 && secs % 3600 === 0) return secs / 3600;
     if (secs >= 60 && secs % 60 === 0) return secs / 60;
     return secs;
   }
 
-  function toSeconds(value, unit) {
+  function toSeconds(value: number, unit: Unit): number {
     if (unit === "hours") return value * 3600;
     if (unit === "minutes") return value * 60;
     return value;
   }
 
-  function displaySeconds() {
+  function unitLabelKey(unit: Unit): UnitLabelKey {
+    return unitOptions.find((option) => option.value === unit)?.labelKey ?? "unitSeconds";
+  }
+
+  function displaySeconds(): number {
     return toSeconds(displayValue, displayUnit);
   }
 
-  function formatPreviewTimer(secs) {
+  function formatPreviewTimer(secs: number): string {
     if (secs >= 3600) {
       const h = Math.floor(secs / 3600);
       const m = Math.floor((secs % 3600) / 60);
@@ -62,8 +77,7 @@
     return `${secs}`;
   }
 
-  /** @type {number | null} */
-  let prevTriggerSave = $state(null);
+  let prevTriggerSave = $state<number | null>(null);
   $effect(() => {
     const currentTriggerSave = triggerSave;
     if (prevTriggerSave === null) {
@@ -114,7 +128,7 @@
     showDeleteConfirm = false;
   }
 
-  function handleDialogKeydown(e) {
+  function handleDialogKeydown(e: KeyboardEvent) {
     if (!showDeleteConfirm) return;
     if (e.key === "Enter") {
       e.preventDefault();
@@ -128,13 +142,11 @@
     }
   }
 
-  /** @param {MouseEvent} e */
-  function handleBackdropClick(e) {
+  function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) cancelDelete();
   }
 
-  /** @param {KeyboardEvent} e */
-  function handleBackdropKeydown(e) {
+  function handleBackdropKeydown(e: KeyboardEvent) {
     if (e.target !== e.currentTarget) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -142,8 +154,7 @@
     }
   }
 
-  /** @param {"interval" | "display"} menu */
-  function toggleUnitMenu(menu) {
+  function toggleUnitMenu(menu: UnitMenu) {
     openUnitMenu = openUnitMenu === menu ? null : menu;
   }
 
@@ -152,10 +163,8 @@
   }
 
   /**
-   * @param {KeyboardEvent} e
-   * @param {"interval" | "display"} menu
    */
-  function handleUnitKeydown(e, menu) {
+  function handleUnitKeydown(e: KeyboardEvent, menu: UnitMenu) {
     if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
       e.preventDefault();
       openUnitMenu = menu;
@@ -166,8 +175,7 @@
     }
   }
 
-  /** @param {KeyboardEvent} e */
-  function handleWindowKeydown(e) {
+  function handleWindowKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") closeUnitMenu();
   }
 
@@ -176,12 +184,12 @@
       // Read current volume from backend so preview matches the real sound
       let vol = 0.6;
       try {
-        const cfg = await invoke("get_app_config");
+        const cfg = await invoke<AppConfig>("get_app_config");
         vol = (cfg.sound_volume ?? 60) / 100;
       } catch (_) {}
 
       const ctx = new AudioContext();
-      const beep = (freq, delay) => {
+      const beep = (freq: number, delay: number) => {
         setTimeout(() => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -236,9 +244,7 @@
         }}
         onkeydown={(e) => handleUnitKeydown(e, "interval")}
       >
-        {$t[
-          unitOptions.find((option) => option.value === intervalUnit)?.labelKey
-        ]}
+        {$t[unitLabelKey(intervalUnit)]}
       </button>
       {#if openUnitMenu === "interval"}
         <div class="unit-menu" role="listbox">
@@ -274,9 +280,7 @@
         }}
         onkeydown={(e) => handleUnitKeydown(e, "display")}
       >
-        {$t[
-          unitOptions.find((option) => option.value === displayUnit)?.labelKey
-        ]}
+        {$t[unitLabelKey(displayUnit)]}
       </button>
       {#if openUnitMenu === "display"}
         <div class="unit-menu" role="listbox">

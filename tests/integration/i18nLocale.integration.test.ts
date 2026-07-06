@@ -2,12 +2,25 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { get } from "svelte/store";
 
-const calls = [];
-const storage = new Map();
+interface InvokeCall {
+  command: string;
+  payload: unknown;
+}
+
+const calls: InvokeCall[] = [];
+const storage = new Map<string, string>();
 
 globalThis.localStorage = {
-  getItem: (key) => storage.get(key) ?? null,
-  setItem: (key, value) => storage.set(key, String(value)),
+  get length() {
+    return storage.size;
+  },
+  clear: () => storage.clear(),
+  getItem: (key: string) => storage.get(key) ?? null,
+  key: (index: number) => Array.from(storage.keys())[index] ?? null,
+  removeItem: (key: string) => storage.delete(key),
+  setItem: (key: string, value: string) => {
+    storage.set(key, String(value));
+  },
 };
 
 Object.defineProperty(globalThis, "navigator", {
@@ -17,13 +30,13 @@ Object.defineProperty(globalThis, "navigator", {
 
 mock.module("@tauri-apps/api/core", {
   exports: {
-    invoke: async (command, payload) => {
+    invoke: async (command: string, payload?: unknown) => {
       calls.push({ command, payload });
     },
   },
 });
 
-const { initLocale, locale, t, toggleLocale } = await import("../../src/lib/i18n.js");
+const { initLocale, locale, t, toggleLocale } = await import("../../src/lib/i18n.ts");
 
 test("integration_initLocale prefers saved locale and syncs it to Tauri", () => {
   calls.length = 0;

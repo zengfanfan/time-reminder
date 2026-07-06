@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { createDefaultReminder } from "../../src/lib/reminders.js";
+import { createDefaultReminder } from "../../src/lib/reminders.ts";
 
 test("unit_createDefaultReminder uses translated defaults when provided", () => {
   const reminder = createDefaultReminder({

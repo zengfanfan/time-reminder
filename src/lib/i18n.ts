@@ -1,9 +1,10 @@
 import { writable, derived } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
+import type { LocaleCode, Translations } from "$lib/types";
 
 const STORAGE_KEY = "time-reminder-locale";
 
-const translations = {
+export const translations: Record<LocaleCode, Translations> = {
     zh: {
         appName: "TimeReminder",
         newReminder: "新建提醒",
@@ -104,7 +105,7 @@ const translations = {
     },
 };
 
-function detectLocale() {
+function detectLocale(): LocaleCode {
     // Check saved preference first
     try {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -116,15 +117,15 @@ function detectLocale() {
     return lang.startsWith("zh") ? "zh" : "en";
 }
 
-export const locale = writable("zh"); // default, will be set on mount
+export const locale = writable<LocaleCode>("zh"); // default, will be set on mount
 
-export function initLocale() {
+export function initLocale(): void {
     const l = detectLocale();
     locale.set(l);
     invoke("set_locale", { locale: l }).catch(() => { });
 }
 
-export function toggleLocale() {
+export function toggleLocale(): void {
     locale.update((l) => {
         const next = l === "zh" ? "en" : "zh";
         try { localStorage.setItem(STORAGE_KEY, next); } catch (_) { }
@@ -136,7 +137,7 @@ export function toggleLocale() {
 export const t = derived(locale, ($locale) => translations[$locale] || translations.zh);
 
 // Utility: format duration using current locale translations
-export function formatDurationLocale(secs, tr) {
+export function formatDurationLocale(secs: number, tr: Pick<Translations, "durationH" | "durationM" | "durationS">): string {
     if (secs < 60) return tr.durationS(secs);
     if (secs < 3600) {
         const m = Math.floor(secs / 60);
@@ -148,7 +149,7 @@ export function formatDurationLocale(secs, tr) {
     return tr.durationH(h, m);
 }
 
-export function formatCountdownLocale(secs, _tr) {
+export function formatCountdownLocale(secs: number, _tr: Translations | Pick<Translations, "durationH" | "durationM" | "durationS">): string | null {
     if (secs >= 3600) return null; // hide when over 1 hour
     const s = Math.max(0, secs);
     const m = Math.floor(s / 60);

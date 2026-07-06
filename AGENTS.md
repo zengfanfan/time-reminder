@@ -9,7 +9,7 @@ This is a SvelteKit + Tauri desktop app. Frontend code lives in `src/`: shared c
 - `bun run dev`: start the Vite/Svelte development server.
 - `bun run build`: build the frontend for production.
 - `bun run preview`: preview the built frontend.
-- `bun run check`: run `svelte-check` with `jsconfig.json`.
+- `bun run check`: run `svelte-check` with `tsconfig.json`.
 - `bun run test`: run all Node tests plus Rust Cargo tests via the package script.
 - `bun run test:unit`: run unit tests and Rust tests filtered by `unit_`.
 - `bun run test:integration`: run integration tests and Rust tests filtered by `integration_`.

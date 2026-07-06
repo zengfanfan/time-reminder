@@ -1,10 +1,11 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import { invoke } from "@tauri-apps/api/core";
     import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-    import { t } from "$lib/i18n.js";
+    import { t } from "$lib/i18n";
+    import type { AppConfig } from "$lib/types";
 
-    let { onClose } = $props();
+    let { onClose }: { onClose?: () => void } = $props();
 
     let autostart = $state(false);
     let hideMainWindowOnStartup = $state(false);
@@ -12,8 +13,8 @@
     let loading = $state(true);
 
     async function loadConfig() {
-        const cfg = await invoke("get_app_config");
-        autostart = cfg.autostart;
+        const cfg = await invoke<AppConfig>("get_app_config");
+        autostart = cfg.autostart ?? false;
         hideMainWindowOnStartup = cfg.hide_main_window_on_startup ?? false;
         soundVolume = cfg.sound_volume ?? 60;
         loading = false;
@@ -37,8 +38,10 @@
         });
     }
 
-    async function handleVolumeChange(e) {
-        soundVolume = Number(e.target.value);
+    async function handleVolumeChange(e: Event) {
+        const target = e.currentTarget;
+        if (!(target instanceof HTMLInputElement)) return;
+        soundVolume = Number(target.value);
         await invoke("set_sound_volume", { volume: soundVolume });
     }
 
@@ -46,7 +49,7 @@
         try {
             const ctx = new AudioContext();
             const vol = soundVolume / 100;
-            const beep = (freq, delay) => {
+            const beep = (freq: number, delay: number) => {
                 setTimeout(() => {
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();

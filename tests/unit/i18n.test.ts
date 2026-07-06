@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatCountdownLocale, formatDurationLocale } from "../../src/lib/i18n.js";
+import { formatCountdownLocale, formatDurationLocale } from "../../src/lib/i18n.ts";
+import type { Translations } from "../../src/lib/types.ts";
 
-const tr = {
+const tr: Pick<Translations, "durationH" | "durationM" | "durationS"> = {
   durationH: (h, m) => (m > 0 ? `${h}h ${m}m` : `${h}h`),
   durationM: (m, s) => (s > 0 ? `${m}m ${s}s` : `${m}m`),
   durationS: (s) => `${s}s`,

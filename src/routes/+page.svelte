@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount, tick } from "svelte";
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
@@ -9,7 +9,7 @@
     deleteReminder,
     toggleReminder,
     createDefaultReminder,
-  } from "$lib/reminders.js";
+  } from "$lib/reminders";
   import {
     locale,
     t,
@@ -17,26 +17,25 @@
     toggleLocale,
     formatDurationLocale,
     formatCountdownLocale,
-  } from "$lib/i18n.js";
+  } from "$lib/i18n";
+  import type { AppConfig, CountdownItem, CountdownMap, ReminderConfig } from "$lib/types";
   import ReminderEditor from "$lib/ReminderEditor.svelte";
   import SettingsPanel from "$lib/SettingsPanel.svelte";
 
-  let reminders = $state([]);
-  let editing = $state(null);
+  let reminders = $state<ReminderConfig[]>([]);
+  let editing = $state<ReminderConfig | null>(null);
   let editingName = $state("");
   let isNew = $state(false);
-  /** @type {HTMLInputElement | null} */
-  let nameInput = $state(null);
+  let nameInput = $state<HTMLInputElement | null>(null);
   let triggerSave = $state(0);
-  let countdowns = $state({});
+  let countdowns = $state<CountdownMap>({});
   let showSettings = $state(false);
   let suppressCloseHover = $state(false);
-  let titlebarMenu = $state(null);
+  let titlebarMenu = $state<{ x: number; y: number } | null>(null);
 
   onMount(() => {
     const contextMenuOptions = { capture: true };
-    /** @param {MouseEvent} e */
-    const handleContextMenu = (e) => {
+    const handleContextMenu = (e: MouseEvent) => {
       if (import.meta.env.DEV) return;
       if (isNativeEditableContext(e.target)) return;
 
@@ -61,7 +60,7 @@
 
     const win = getCurrentWebviewWindow();
     // Show window after content is ready to avoid WebView2 white flash
-    const cfg = await invoke("get_app_config");
+    const cfg = await invoke<AppConfig>("get_app_config");
     if (!cfg.hide_main_window_on_startup) {
       win.show();
     }
@@ -73,22 +72,22 @@
     });
 
     // Rust broadcasts every second — directly drive countdowns from it
-    await win.listen("countdown-tick", (event) => {
+    await win.listen<CountdownItem[]>("countdown-tick", (event) => {
       console.log("[tick]", Date.now(), JSON.stringify(event.payload));
-      const map = {};
+      const map: CountdownMap = {};
       for (const item of event.payload) map[item.id] = item.remaining;
       countdowns = map;
     });
   });
 
-  function handleKeydown(e) {
+  function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
       if (titlebarMenu) closeTitlebarMenu();
       else if (editing) handleBack();
       else if (showSettings) showSettings = false;
     } else if (editing && e.key === "Enter") {
-      const tag = e.target.tagName;
+      const tag = e.target instanceof HTMLElement ? e.target.tagName : "";
       if (tag !== "TEXTAREA" && tag !== "SELECT") {
         e.preventDefault();
         triggerSave++;
@@ -105,21 +104,21 @@
     nameInput?.select();
   }
 
-  async function handleSave(config) {
+  async function handleSave(config: ReminderConfig) {
     await saveReminder({ ...config, name: editingName });
     reminders = await loadReminders();
     editing = null;
     isNew = false;
   }
 
-  async function handleDelete(id) {
+  async function handleDelete(id: string) {
     await deleteReminder(id);
     reminders = await loadReminders();
     editing = null;
     isNew = false;
   }
 
-  async function handleToggle(id, enabled) {
+  async function handleToggle(id: string, enabled: boolean) {
     // Immediately clear the countdown for this id to prevent flash of stale value
     const { [id]: _, ...rest } = countdowns;
     countdowns = rest;
@@ -127,7 +126,7 @@
     reminders = await loadReminders();
   }
 
-  async function handleEdit(reminder) {
+  async function handleEdit(reminder: ReminderConfig) {
     isNew = false;
     editing = { ...reminder };
     editingName = reminder.name;
@@ -146,12 +145,12 @@
     titlebarMenu = null;
   }
 
-  function isTitlebarControl(target) {
+  function isTitlebarControl(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false;
     return Boolean(target?.closest?.("button, input, select, textarea, a"));
   }
 
-  /** @param {EventTarget | null} target */
-  function isNativeEditableContext(target) {
+  function isNativeEditableContext(target: EventTarget | null) {
     if (!(target instanceof Element)) return false;
     const field = target.closest(
       "input, textarea, [contenteditable=''], [contenteditable='true']",
@@ -159,13 +158,13 @@
     return Boolean(field && !field.matches(":disabled, [readonly]"));
   }
 
-  async function handleTitlebarMouseDown(e) {
+  async function handleTitlebarMouseDown(e: MouseEvent) {
     if (e.button !== 0 || isTitlebarControl(e.target)) return;
     closeTitlebarMenu();
     await getCurrentWebviewWindow().startDragging();
   }
 
-  function handleTitlebarContextMenu(e) {
+  function handleTitlebarContextMenu(e: MouseEvent) {
     e.stopPropagation();
 
     if (isNativeEditableContext(e.target)) {
@@ -370,7 +369,12 @@
               <input
                 type="checkbox"
                 checked={r.enabled}
-                onchange={(e) => handleToggle(r.id, e.target.checked)}
+                onchange={(e) => {
+                  const target = e.currentTarget;
+                  if (target instanceof HTMLInputElement) {
+                    handleToggle(r.id, target.checked);
+                  }
+                }}
               />
               <span class="toggle-track"
                 ><span class="toggle-thumb"></span></span

@@ -1,8 +1,9 @@
-<script>
+<script lang="ts">
   import { onMount, tick } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-  import { t, initLocale } from "$lib/i18n.js";
+  import { t, initLocale } from "$lib/i18n";
+  import type { OverlayData } from "$lib/types";
 
   // Data filled after backend fetch
   let reminderId = $state("");
@@ -18,23 +19,21 @@
   let exitChallengeRight = $state(0);
   let exitChallengeAnswer = $state("");
   let exitChallengeError = $state(false);
-  /** @type {HTMLInputElement | null} */
-  let exitChallengeInput = $state(null);
+  let exitChallengeInput = $state<HTMLInputElement | null>(null);
   const exitChallengeLabels = {
     answer: "\u9000\u51fa\u6821\u9a8c\u7b54\u6848",
     error: "\u7b54\u9519\u4e86\uff0c\u518d\u8bd5\u4e00\u6b21\u3002",
   };
 
-  let timer = null;
-  let win = null;
+  let timer = $state<ReturnType<typeof setInterval> | null>(null);
+  let win = $state<ReturnType<typeof getCurrentWebviewWindow> | null>(null);
 
   // Corner slide-down animation when repositioned
   let repositioning = $state(false);
 
   onMount(() => {
     const contextMenuOptions = { capture: true };
-    /** @param {MouseEvent} e */
-    const handleContextMenu = (e) => {
+    const handleContextMenu = (e: MouseEvent) => {
       if (import.meta.env.DEV) return;
       if (isNativeEditableContext(e.target)) return;
 
@@ -57,10 +56,10 @@
     windowLabel = win.label;
 
     // Fetch our own payload from the backend
-    const data = await invoke("get_overlay_data", { label: windowLabel });
+    const data = await invoke<OverlayData | null>("get_overlay_data", { label: windowLabel });
     if (!data) {
       // Shouldn't happen, close self
-      win.close();
+      await win.close();
       return;
     }
 
@@ -136,8 +135,7 @@
     exitChallengeError = false;
   }
 
-  /** @param {SubmitEvent} e */
-  function submitExitChallenge(e) {
+  function submitExitChallenge(e: SubmitEvent) {
     e.preventDefault();
 
     const answer = Number(exitChallengeAnswer);
@@ -151,16 +149,14 @@
     exitChallengeInput?.focus();
   }
 
-  /** @param {KeyboardEvent} e */
-  function handleExitChallengeKeydown(e) {
+  function handleExitChallengeKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
       cancelExitChallenge();
     }
   }
 
-  /** @param {EventTarget | null} target */
-  function isNativeEditableContext(target) {
+  function isNativeEditableContext(target: EventTarget | null) {
     if (!(target instanceof Element)) return false;
     const field = target.closest(
       "input, textarea, [contenteditable=''], [contenteditable='true']",
@@ -172,7 +168,7 @@
     try {
       const vol = (soundVolume ?? 60) / 100;
       const ctx = new AudioContext();
-      const makeBeep = (freq, delay) => {
+      const makeBeep = (freq: number, delay: number) => {
         setTimeout(() => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -193,7 +189,7 @@
     }
   }
 
-  function formatCountdown(secs) {
+  function formatCountdown(secs: number): string {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     if (m > 0) return `${m}:${s.toString().padStart(2, "0")}`;

@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import type { ReminderConfig } from "../../src/lib/types.ts";
 
-const calls = [];
+interface InvokeCall {
+  command: string;
+  payload: unknown;
+}
+
+const calls: InvokeCall[] = [];
 
 mock.module("@tauri-apps/api/core", {
   exports: {
-    invoke: async (command, payload) => {
+    invoke: async (command: string, payload?: unknown) => {
       calls.push({ command, payload });
       return { command, payload };
     },
@@ -18,14 +24,14 @@ const {
   loadReminders,
   saveReminder,
   toggleReminder,
-} = await import("../../src/lib/reminders.js");
+} = await import("../../src/lib/reminders.ts");
 
 test("integration_reminder_command_wrappers call the expected Tauri commands", async (t) => {
   t.beforeEach(() => {
     calls.length = 0;
   });
 
-  const config = {
+  const config: ReminderConfig = {
     id: "r1",
     name: "Break",
     text: "Move",
