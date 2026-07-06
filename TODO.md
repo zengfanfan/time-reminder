@@ -4,6 +4,9 @@
 
 ```bash
 
+# prepare environment
+bun install
+
 # develpment
 cargo tauri dev
 
@@ -12,9 +15,6 @@ cargo tauri build
 
 # rust unit test
 cd src-tauri && cargo test
-
-# front-end test
-npm run test
 
 ```
 

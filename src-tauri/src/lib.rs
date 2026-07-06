@@ -17,8 +17,6 @@ pub struct AppConfig {
     pub autostart: bool,
     #[serde(default)]
     pub hide_main_window_on_startup: bool,
-    pub quit_on_close: bool,
-    pub minimize_to_tray: bool,
     pub locale: String,
     #[serde(default = "default_sound_volume")]
     pub sound_volume: u8,
@@ -33,8 +31,6 @@ impl Default for AppConfig {
         Self {
             autostart: false,
             hide_main_window_on_startup: false,
-            quit_on_close: false,
-            minimize_to_tray: false,
             locale: "en".to_string(),
             sound_volume: 60,
         }
@@ -194,38 +190,6 @@ fn set_autostart(
 }
 
 #[tauri::command]
-fn set_quit_on_close(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-    enabled: bool,
-) -> Result<(), String> {
-    let cfg = {
-        let mut cfg = state.app_config.lock().unwrap();
-        cfg.quit_on_close = enabled;
-        cfg.save();
-        cfg.clone()
-    };
-    sync_tray_menu(&app, &cfg);
-    Ok(())
-}
-
-#[tauri::command]
-fn set_minimize_to_tray(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-    enabled: bool,
-) -> Result<(), String> {
-    let cfg = {
-        let mut cfg = state.app_config.lock().unwrap();
-        cfg.minimize_to_tray = enabled;
-        cfg.save();
-        cfg.clone()
-    };
-    sync_tray_menu(&app, &cfg);
-    Ok(())
-}
-
-#[tauri::command]
 fn set_hide_main_window_on_startup(
     state: tauri::State<'_, AppState>,
     enabled: bool,
@@ -362,8 +326,6 @@ pub fn run() {
             toggle_reminder,
             get_app_config,
             set_autostart,
-            set_quit_on_close,
-            set_minimize_to_tray,
             set_hide_main_window_on_startup,
             set_sound_volume,
             set_locale,
